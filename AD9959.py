@@ -103,10 +103,8 @@ class AD9959():
         self.CSR_LOW_NIBBLE = 0b0010
         self.FR1_VCO_BYTE = 0x80
            
-        #Ref_clock frequency initialised at 50 MHz
+        #Ref_clock frequency initialised at 50 MHz. Use self.set_refclock to change.
         self.refclock_freq = 50e6
-        self.clock_freq = self.refclock_freq*self.freqmult
-
         self.init_dds(freqmult=10, channels=0)
 
         self.set_current([0,1,2,3], 1)           
