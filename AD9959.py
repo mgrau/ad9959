@@ -96,6 +96,8 @@ _register_len = {
 class AD9959():
 
     def __init__(self, device=0):
+        """Constructor. """
+
         # setup the GPIO
         self.spi = spidev.SpiDev()
         self.spi.open(0, device)
@@ -122,88 +124,191 @@ class AD9959():
         self.reset()
 
         self.set_freqmult(freqmult)
-        self.set_channels(channels)
-        self.ioupdate()
+        self._set_channels(channels)
+        self._io_update()
         
         self.currents = [1, 1, 1, 1]
         self.frequencies = [0, 0, 0, 0]
         self.amplitudes = [1, 1, 1, 1]
         self.phases = [0, 0, 0, 0]
 
-    def toggle_pin(self, pin):
-        gpio.output(pin, 0)
-        gpio.output(pin, 1)
-        gpio.output(pin, 0)
-
-    def ioupdate(self,):
-        """
-        Toggles IO_UPDATE pin on the RPi to load all commands to the DDS sent
-        since last ioupdate.
-        """
-
-        self.toggle_pin(IOUPDATE_PIN)
-            
-    def reset(self,):
-        """
-        Resets the status of the DDS, sets all register entries to default.
-        Also resets the stored values from set_ functions to default. 
-        """
-
-        self.toggle_pin(RESET_PIN)             
-
-    def write(self, register, data):
-        """
-        Writes a list of bytes (data) into selected register. 
-        register must be given as a string and must be contained in _registers.
-        data must be given as a list with appropriate number of bytes, as
-        stated in _register_len.
-        """
+    def set(channels, value, var, io_update=False):
+        scale_factor
+        """Set frequency, phase or amplitude of selected channel(s). 
         
-        #data: list of bytes to write to register
-        assert register in _registers, '%r is not a valid register. Register must be passed as string.' %register
-        assert len(data) == _register_len[register], 'Must pass %r byte(s) to %r register.' %(_register_len[register], register)
+        # Function description
+        Sets frequency, phase or amplitude of a channel or a list of channels.
+
+        ### Arguments
+        * `channels` -- `channels` can be a single int from `0`, `1`, `2` or `3` or a list of several channels.
+        * `value` -- value
+        * `var` -- `frequency`, `phase`, or `amplitude`
+
+        ### Keyword arguments
+        * `io_update` -- Setting `io_update=True` will issue an io update to write the settings into the DDS registers.
         
-        # send the register we want to write to
-        self.spi.writebytes([_registers[register]])
+        ### Setting frequency
+        `value` must be frequency in Hz.
+
+        ### Setting phase
+        `value` must be the phase in degress and must lie between 0 and 359.987 deg
+
+        ### Setting the amplitude
+        `value` must the scale factor and must lie between Min: 0.001 and Max: 1.
+        If scale_factor == 1, ASF is switched off. Otherwise the ASF is turned on.
+        """
+
+        #Activate selected channels
+        self._set_channels(channels)
+
+        #Turn off linear sweep
+        BYTE1 = self._read('CFR')[1] & 0x03
+        self._write('CFR', [0x00, BYTE1, self._read('CFR')[2]])
+
+        if var == 'frequency':
+            register = 'CFTW0'  #Write FTW to CFTW0 register
+            data = self._convert_frequency(value)
         
-        # send the bytes we write to the register
-        self.spi.writebytes(data)
-              
+        elif var == 'phase':
+            register = 'CPOW0'  #write POW bytes into correct register
+            data = self._convert_phase(value)
+
+        elif var == 'amplitude':
+            register = 'ACR'  # Write to 'ACR' register
+            data = self._convert_amplitude(value)
+
+        self._write(register, new_state)
+        self._update(var, channels, value)
+
+        if io_update:
+            self._io_update()
+
+    def set_freqsweeptime(self, channels, start_freq, end_freq, sweeptime, no_dwell=False, ioupdate=False, trigger=False):
+        """Activates linear frequency sweep mode. 
+
+        Sweeping from start_freq to end_freq (in Hz) with a duration of sweeptime (in seconds).
+        To reset frequency to start_freq after sweep, set no_dwell=True
+        Setting ioupdate=True will issue an ioupdate to write the settings into the DDS registers
+        Setting trigger=True will immediately trigger the ramp by setting the channel pins to high.
+        Note that trigger only works if ioupdate is also set to True.
+        """
+
+        step_interval = 1e-6 #1us
+        steps = sweeptime/step_interval #Number of steps
+        step_size = abs(end_freq-start_freq)/steps
+        
+        self._init_sweep(scan_type='frequency', channels=channels, start_val=start_freq, end_val=end_freq, RSS=step_size, RSI=step_interval, no_dwell=no_dwell)
                 
-    def read(self, register):
-        
+        if ioupdate:
+            self._io_update()
+            if trigger:
+                PINS = self.select_CHPINS(channels)
+                gpio.output(PINS, 0)
+                gpio.output(PINS, 1)
+
+    def set_ampsweeptime(self, channels, start_scale, end_scale, sweeptime, no_dwell=False, ioupdate=False, trigger=False):
+        """Activates linear amplitude sweep mode. 
+
+        Sweeping from start_scale to end_scale with a duration of sweeptime.
+        To reset amplitude to start_scale after sweep, set no_dwell=True
+        Setting ioupdate=True will issue an ioupdate to write the settings into the DDS registers.
+        Setting trigger=True will immediately trigger the ramp by setting the channel pins to high.
+        Note that trigger only works if ioupdate is also set to True.
         """
-        Returns list of bytes (data), currently stored in register.
+        
+        step_interval = 1e-6 #1us
+        steps = sweeptime/step_interval #Number of steps
+        step_size = (end_scale-start_scale)/steps
+        
+        self._init_sweep(scan_type='amplitude', channels=channels, start_val=start_scale, end_val=end_scale, RSS=step_size, RSI=step_interval, no_dwell=no_dwell)
+        
+        #IOUPDATE and Start
+        if ioupdate:
+            self._io_update()
+            if trigger:
+                PINS = self.select_CHPINS(channels)
+                gpio.output(PINS, 0)
+                gpio.output(PINS, 1)
+
+    def get_frequency(self,):
+        """Returns the frequency values set in all channels as a list. 
+
+        The values' position indicate the corresponding channel: [CH0, CH1, CH2, CH3]
         """
         
-        assert register in _registers, 'Not a valid register. Register must be passed as string.'
+        #TODO:
+            #Find way to appropriately reconvert the frequency to its initial
+            #Value or alert that the value is APPROXIMATE
+        FTW = int (0)
+        freq = int(0)
         
-        #send read command to register        
-        self.spi.writebytes([READ | _registers[register]])
+        FTW_bytes = self._read('CFTW0')
+        FTW = FTW.from_bytes(FTW_bytes,'big')
+        freq = FTW*self.clock_freq/2**32
         
-        #return values in register
-        return self.spi.readbytes(_register_len[register])
-                   
+        print('Latest frequency set: ', "{:.2e}".format(freq), 'Hz')
+        print(['%.2e' % elem for elem in self.frequencies])
+        
+        return self.frequencies
+
+    def get_phase(self,):    
+        """Returns the phase values set in all channels as a list. 
+
+        The values' position indicate the corresponding channel: [CH0, CH1, CH2, CH3]
+        """
+        
+        #for comparison
+        initial_state = self._read('CPOW0')
+        
+        POW_step = 0.02197265
+        POW = 0x00 | initial_state[0] << 8| initial_state [1]
+        phase = round(POW*POW_step, 2)
+        
+        print ('Latest phase set (i.e. currently in register):', phase)
+        
+        return self.phases
+
+    def get_amplitude(self,):
+        """Returns the amplitude values set in all channels as a list. 
+
+        The values' position indicate the corresponding channel: [CH0, CH1, CH2, CH3]
+        """
+                
+        data = self._read('ACR')
+        BYTE1 = data[1]
+        BYTE2 = data[2]
+        
+        ASF = (0x03 & BYTE1) << 8 | BYTE2
+        ASF_step = 0.00097751
+        scale_factor = ASF*ASF_step
+        
+        if scale_factor == 0:
+            print ('Latest scale_factor set (i.e. currently in register):', 1)
+        else:
+            print ('Latest scale_factor set (i.e. currently in register):', scale_factor)
+
+        return self.amplitudes
+
     def get_state(self, form='hex'):
-        
-        ''' 
-        Prints all values in DDS registers in hex or bin format
-        The default format is 'hex' but can be changed to 'bin'
-        '''
+        """Prints all values in DDS registers in hex or bin format. The default format is 'hex' but can be changed to 'bin' """
         
         assert (form == 'hex') or (form == 'bin')
         
         if form == 'hex':
             for key in _registers:
-                print(key, ['0x{:02x}'.format(b) for b in self.read(key)])
+                print(key, ['0x{:02x}'.format(b) for b in self._read(key)])
         else:
             for key in _registers:
-                print(key, ['{:08b}'.format(b) for b in self.read(key)])
+                print(key, ['{:08b}'.format(b) for b in self._read(key)])
+            
+    def reset(self,):
+        """Resets the status of the DDS, sets all register entries to default. Also resets the stored values from set_ functions to default. """
+
+        self._toggle_pin(RESET_PIN)                  
     
-    def set_channels(self, channels, ioupdate=False):
-        
-        """
-        Activates one or multiple channels to write settings to.
+    def _set_channels(self, channels, ioupdate=False):
+        """Activates one or multiple channels to write settings to.
+
         channels must be passed in a list or as an int, containg channels between 0,1,2 or 3.
         Additionally, always sets communication mode into 3 wire mode: CSR[1:2].
         """
@@ -214,7 +319,7 @@ class AD9959():
         #If only one channel is selected
         if type(channels) is int:
             assert channels in [0, 1, 2, 3], 'channel must be 0, 1, 2 or 3'
-            self.write('CSR', [2**(channels) << 4 | self.CSR_LOW_NIBBLE])
+            self._write('CSR', [2**(channels) << 4 | self.CSR_LOW_NIBBLE])
         
         #If several channels are given
         elif type(channels) is list:
@@ -227,15 +332,15 @@ class AD9959():
             for channel in uniq_channels:
                 channel_nibble += 2**channel
             channel_nibble << 4
-            self.write('CSR', [channel_nibble << 4| self.CSR_LOW_NIBBLE])
+            self._write('CSR', [channel_nibble << 4| self.CSR_LOW_NIBBLE])
     
         if ioupdate:
-            self.ioupdate()
+            self._io_update()
             
     def get_activechannels(self,):
         """Returns currently active channels in a list. """
         
-        channels_nibble = self.read('CSR')[0] >> 4
+        channels_nibble = self._read('CSR')[0] >> 4
         channels = []
         
         for i in reversed (range (4)):
@@ -280,7 +385,7 @@ class AD9959():
                 'self.clock_frequency must lie between Min: 100MHz and Max 500MHz'
         
         #Read current state of FR1 register
-        initial_state = self.read('FR1')
+        initial_state = self._read('FR1')
         
         if freqmult == 1:
             #toggles VCO off deletes multiplier and copies charge pump control
@@ -303,7 +408,7 @@ class AD9959():
         #data for FR1 register
         new_state = [BYTE0, BYTE1, BYTE2]
         #write new state into register
-        self.write('FR1', new_state)
+        self._write('FR1', new_state)
         
         #Set new freqmult value and print clock information
         self.freqmult = freqmult
@@ -312,79 +417,19 @@ class AD9959():
                '\nClock Frequency =', "{:.2e}".format(self.clock_freq), 'Hz')
     
         if ioupdate:
-            self.ioupdate()
+            self._io_update()
         
     def get_freqmult(self,):
         """Returns current value of frequency multiplier. """
         
-        BYTE0 = (self.read('FR1')[0] & 0b01111100) >> 2
+        BYTE0 = (self._read('FR1')[0] & 0b01111100) >> 2
         self.freqmult = BYTE0
         
         if BYTE0 == 0:
             return 1
         else:
             return (BYTE0)
-    
-    def set_frequency(self, channels, frequency, ioupdate=False):
-        """ Sets frequency of selected channel(s).
-
-        Frequency must be passed in Hz. Channels can be a single int from 0, 1, 2 or 3 or a list of several of 0, 1, 2 or 3. Setting ioupdate=True will issue an ioupdate to write the settings into the DDS registers.
-        """
-        
-        #Activate selected channels
-        self.set_channels(channels)
-        
-        #Assert frequency lies within allowed range
-        FTW_step = self.clock_freq/2**32
-        FTW = round(frequency/FTW_step)
-        Min_freq = FTW_step
-        Max_freq = (2**32-1)*FTW_step
-        
-        assert FTW > 0, 'Minimum frequency is %r' %Min_freq
-        assert FTW <= 2**32, 'Maximum frequency is %r' %Max_freq
-        
-        #Turn off linear sweep
-        BYTE1 = self.read('CFR')[1] & 0x03
-        self.write('CFR', [0x00, BYTE1, self.read('CFR')[2]])
-        
-        #Compute frequency tuning word for given frequency and clock frequency
-        #Write FTW in list of 4 bytes (CFTW0 is a 32-bit register)
-        data = [FTW.to_bytes(4,'big')[i] for i in range(4)]
-        
-        #Write FTW to CFTW0 register
-        self.write('CFTW0', data)
-
-        #For every channel, if channel is set 'on' in set_channels, write the new value for that channel into list
-        if type(channels) is int:
-            channels = [channels]
-        for channel in channels:
-            self.frequencies[channel] = frequency
-
-        if ioupdate:
-            self.ioupdate()
-                 
-    def get_frequency(self,):
-        """Returns the frequency values set in all channels as a list. 
-
-        The values' position indicate the corresponding channel: [CH0, CH1, CH2, CH3]
-        """
-        
-        #TODO:
-            #Find way to appropriately reconvert the frequency to its initial
-            #Value or alert that the value is APPROXIMATE
-        FTW = int (0)
-        freq = int(0)
-        
-        FTW_bytes = self.read('CFTW0')
-        FTW = FTW.from_bytes(FTW_bytes,'big')
-        freq = FTW*self.clock_freq/2**32
-        
-        print('Latest frequency set: ', "{:.2e}".format(freq), 'Hz')
-        print(['%.2e' % elem for elem in self.frequencies])
-        
-        return self.frequencies
-
-                
+           
     def set_current(self, channels, divider, ioupdate=False):      
         """Sets current of selected channel(s).
 
@@ -394,10 +439,10 @@ class AD9959():
         assert divider in [1, 2, 4, 8], 'Divider must be 1, 2, 4 or 8'
         
         #Activate selected channels
-        self.set_channels(channels)
+        self._set_channels(channels)
                 
         #Read initial state
-        initial_state = self.read('CFR')
+        initial_state = self._read('CFR')
         
         #Convert divider to bits
         if divider == 1:
@@ -416,7 +461,7 @@ class AD9959():
         #New data for CFR register
         new_state = [initial_state[0], BYTE1_new, initial_state[2]]
         
-        self.write('CFR', new_state)
+        self._write('CFR', new_state)
         
         #Save Data for get_current
             #For every channel, if channel is set 'on' in set_channels
@@ -428,7 +473,7 @@ class AD9959():
             self.currents[channel] = divider
 
         if ioupdate:
-            self.ioupdate()
+            self._io_update()
 
     def get_current(self,):           
         """Returns the current values set in all channels as a list. 
@@ -437,7 +482,7 @@ class AD9959():
         """
         
         #for comparison
-        initial_state = self.read('CFR')
+        initial_state = self._read('CFR')
         bits = initial_state[1] & 0x03
         
         if bits == 0b11:
@@ -453,156 +498,13 @@ class AD9959():
         
         # Returns values saved in set_current
         return self.currents
-
-    def set_amplitude(self, channels, scale_factor, ioupdate=False):
-        """Sets amplitude scale factor to selected channels. 
-
-        If scale_factor == 1, ASF is switched off. Otherwise the ASF is turned on.
-        The scale_factor must lie between Min: 0.001 and Max: 1.
-        
-        channels can be a single int from 0, 1, 2 or 3 or a list of several of 0, 1, 2 or 3.
-        NOTE:RU/RD mode remains unchanged by this function.
-        Setting ioupdate=True will issue an ioupdate to write the settings into the DDS registers.
-        """
-        
-        #Sets ASF and toggles the multiplier bit on ACR[12], without changing the rest of ACR register.
-        #In particular RU/RD mode remains as is
-        
-        #If scale factor is set to 1, turn off ASF
-        if scale_factor == 1:
-            initial_state = self.read('ACR')
-            BYTE0 = initial_state[0]
-            BYTE1 = initial_state[1] & 0b11101100
-            BYTE2 = 0x00
-            new_state = [BYTE0, BYTE1, BYTE2]
-
-            #Activate selected channels
-            self.set_channels(channels)
-            
-            #Write to 'ACR' register
-            self.write('ACR', new_state)
-            
-            #Turn off linear sweep in 'CFR'
-            BYTE1 = self.read('CFR')[1] & 0x03
-            self.write('CFR', [0x00, BYTE1, self.read('CFR')[2]])
-        else:            
-            ASF_step = 1/2**10
-            ASF = round(scale_factor/ASF_step)
-            assert ASF > 0, 'Minimum scale factor is 0.001'
-            assert ASF < 2**10, 'Choose a scale factor equal or below 1'
-                
-            ASF = round(scale_factor/ASF_step)
-            
-            initial_state = self.read('ACR')
-            BYTE0 = initial_state[0]
-            BYTE1 = (((initial_state[1] >> 2) & 0b111011) << 2) | 0x10 | (ASF >> 8)
-            BYTE2 = ASF & 0xFF
-            new_state = [BYTE0, BYTE1, BYTE2]
-            
-            #Activate selected channels
-            self.set_channels(channels)
-                
-            #Write to 'ACR' register
-            self.write('ACR', new_state)
-            
-            #Turn off linear sweep in 'CFR'
-            BYTE1 = self.read('CFR')[1] & 0x03
-            self.write('CFR', [0x00, BYTE1, self.read('CFR')[2]])
-            
-        #Save Data for get_amplitude
-            #For every channel, if channel is set 'on' in set_channels,
-            #write the new value for that channel into list
-        
-        if type(channels) is int:
-            channels = [channels]
-        for channel in channels:
-            self.amplitudes[channel] = scale_factor
-
-        if ioupdate:
-            self.ioupdate()
-        
-    def get_amplitude(self,):
-        """Returns the amplitude values set in all channels as a list. 
-
-        The values' position indicate the corresponding channel: [CH0, CH1, CH2, CH3]
-        """
-                
-        data = self.read('ACR')
-        BYTE1 = data[1]
-        BYTE2 = data[2]
-        
-        ASF = (0x03 & BYTE1) << 8 | BYTE2
-        ASF_step = 0.00097751
-        scale_factor = ASF*ASF_step
-        
-        if scale_factor == 0:
-            print ('Latest scale_factor set (i.e. currently in register):', 1)
-        else:
-            print ('Latest scale_factor set (i.e. currently in register):', scale_factor)
-
-        return self.amplitudes
-
-    def set_phase(self, channels, phase, ioupdate=False):
-        """Sets phase offset for selected channels.
-
-        The phase must be given in degress and must lie between 0 and 359.987 deg. Setting ioupdate=True will issue an ioupdate to write the settings into the DDS registers.
-        
-        channels can be a single int from 0, 1, 2 or 3 or a list of several of 0, 1, 2 or 3.
-        """
-
-        assert (phase >= 0 and phase < 359.988), 'Phase must be between 0 and 359.987 degrees'
-        
-        #Activate selected channels
-        self.set_channels(channels)
-        
-        #Convert phase into POW
-        POW_step = 0.02197265
-        POW = round(phase/POW_step)
-        
-        #Convert POW into bytes
-        BYTE0 = 0x00 | (POW >> 8)
-        BYTE1 = 0xFF & POW
-        new_state = [BYTE0, BYTE1]
-        
-        #write POW bytes into correct register
-        self.write('CPOW0', new_state)
-
-        #Save Data for get_phase
-            #For every channel, if channel is set 'on' in set_channels,
-            #write the new value for that channel into list
-        
-        if type(channels) is int:
-            channels = [channels]
-        for channel in channels:
-            self.phases[channel] = phase
-        
-        if ioupdate:
-            self.ioupdate()
-
-    def get_phase(self,):    
-        """Returns the phase values set in all channels as a list. 
-
-        The values' position indicate the corresponding channel: [CH0, CH1, CH2, CH3]
-        """
-        
-        #for comparison
-        initial_state = self.read('CPOW0')
-        
-        POW_step = 0.02197265
-        POW = 0x00 | initial_state[0] << 8| initial_state [1]
-        phase = round(POW*POW_step, 2)
-        
-        print ('Latest phase set (i.e. currently in register):', phase)
-        
-        return self.phases
-        
-    def set_ampsweep(self, channels, start_scale, end_scale, RSS, RSI, FSS=False, FSI=False, \
-                     no_dwell=False, ioupdate=False, trigger=False):
-        """Turns on amplitude linear sweep mode and programs the settings as passed.
+    
+    def _init_sweep(self, scan_type, channels, start_val, end_val, RSS, RSI, FSS='same', FSI='same', no_dwell=False, ioupdate=False, trigger=False):
+        """Turns on amplitude or frequency linear sweep mode and programs the settings as passed.
 
         channels: single channel or list of channels from [0, 1, 2, 3],
-        start_scale: starting amplitude (between 0 and 1),
-        end_scale: final amplitude,
+        start_val: starting amplitude (between 0 and 1) or frequency
+        end_val: final amplitude or frequency
         RSS: Rising Step Size (between 0 and 1)
         RSI: Rising Step Interval (limited by clock frequency, RSI_min = 1/(self.clock_freq/4), RSI_max = 255/(self.clock_freq/4))
         FSS: Falling Step Size (if not given, takes same value as RSS)
@@ -619,11 +521,60 @@ class AD9959():
         """
         
         #Assign values if none are given
-        if FSS == 0: FSS = RSS
-        if FSI == 0: FSI = RSI   
+        if FSS == 'same': FSS = RSS
+        if FSI == 'same': FSI = RSI  
+
+        #Assert RSI and FSI are in allowed ranges. Compute and print allowed ranges.
+        RSI_min = 1/(self.clock_freq/4)
+        RSI_max = 255/(self.clock_freq/4)
+        assert RSI > RSI_min, 'RSI is set below minimum: %r s. To lower minimum, clock frequency needs to be increased' %RSI_min
+        assert FSI > RSI_min, 'FSI is set below minimum: %r s. To lower minimum, clock frequency needs to be increased' %RSI_min
+        assert RSI < RSI_max, 'RSI is set above maximum: %r s. To increase maximum, clock frequency needs to be decreased' %RSI_max
+        assert FSI < RSI_max, 'FSI is set above maximum: %r s. To increase maximum, clock frequency needs to be decreased' %RSI_max
+
+        #Activate selected channels
+        self._set_channels(channels)
         
-        #Asserts
-            #Assert start_scale, end_scale, RSS and FSS are between min and max values, like in set_amplitude
+        #Set modulation level to two-level modulation (FR1[9:8]=00)
+        FR1_BYTES = self._read('FR1')
+        if(FR1_BYTES[1] & 0b00000011):
+            FR1_BYTES[1] = FR1_BYTES[1] & 0b11111100
+            self._write('FR1', FR1_BYTES)
+            #If modulation level is already set to two-level, do nothing
+        else:
+            pass
+        #Input sweep settings
+
+        if scan_type == 'frequency':
+            self._init_freq_sweep(start_val, end_val, RSS, RSI, FSS)
+        elif scan_type == 'amplitude':
+            self._init_amp_sweep(start_val, end_val, RSS, RSI, FSS)
+
+        #Set Linear Sweep Ramp Rates (LSR):
+        LSR_BYTES = [0, 0]
+        
+        #Write F(alling)SRR in LSR[15:8], R(ising)SRR in LSR[7:0]
+        #RSI_min = 1/(clock_freq/4), RSI_max = 255/(clock_freq/4)
+        #RSRR = clock_freq*RSI/4    
+        RSRR = round(RSI*self.clock_freq/4)
+        FSRR = round(FSI*self.clock_freq/4)
+
+        LSR_BYTES[0] = FSRR
+        LSR_BYTES[1] = RSRR
+        
+        self._write('LSR', LSR_BYTES)
+                
+        #IOUPDATE and Start
+        if ioupdate:
+            self._io_update()
+            if trigger:
+                PINS = self.select_CHPINS(channels)
+                gpio.output(PINS, 0)
+                gpio.output(PINS, 1)
+            
+
+    def _init_amp_sweep(self, start_scale, end_scale, RSS, FSS): 
+        #Assert start_scale, end_scale, RSS and FSS are between min and max values, like in set_amplitude
         ASF_step = 1/(2**10 - 1) #Corrected bug. ASF_step must not be 1/2**10 to avoid writing 11 bits into 10 bit register, when setting scale to 1.
         
         start_ASF = round(start_scale/ASF_step)
@@ -641,24 +592,11 @@ class AD9959():
         assert RDW < 2**10, 'Choose a RSS factor smaller or equal 1'
         assert FDW < 2**10, 'Choose a FSS factor smaller or equal 1'
         
-        assert start_ASF < end_ASF, 'start_scale must be smaller than end_scale'        
-        
-            #Assert RSI and FSI are in allowed ranges. Compute and print allowed ranges.
-        RSI_min = 1/(self.clock_freq/4)
-        RSI_max = 255/(self.clock_freq/4)
-        assert RSI > RSI_min, 'RSI is set below minimum: %r s. To lower minimum, clock frequency needs to be increased' %RSI_min
-        assert FSI > RSI_min, 'FSI is set below minimum: %r s. To lower minimum, clock frequency needs to be increased' %RSI_min
-        assert RSI < RSI_max, 'RSI is set above maximum: %r s. To increase maximum, clock frequency needs to be decreased' %RSI_max
-        assert FSI < RSI_max, 'FSI is set above maximum: %r s. To increase maximum, clock frequency needs to be decreased' %RSI_max
+        assert start_ASF < end_ASF, 'start_scale must be smaller than end_scale'   
 
-        
-        #Activate selected channels
-        self.set_channels(channels)
-        
-        
         #Setting up linear sweep mode
         CFR_BYTES = [0, 0, 0]
-        CFR_initial = self.read('CFR')
+        CFR_initial = self._read('CFR')
             #Set AFP select to amplitude sweep (CFR[23:22]=01)
         CFR_BYTES[0] = 0x40    
             #Enable Linear Sweep (CFR[14]=1) (copy last two bits)
@@ -668,131 +606,39 @@ class AD9959():
             #Copy BYTE2 from initial state (More options can be set here. Need to enlarge this function)
         CFR_BYTES[2] = CFR_initial[2]
             #Write bytes to CFR
-        self.write('CFR', CFR_BYTES)
-        
-            #Set modulation level to two-level modulation (FR1[9:8]=00)
-        FR1_BYTES = self.read('FR1')
-        if(FR1_BYTES[1] & 0b00000011):
-            FR1_BYTES[1] = FR1_BYTES[1] & 0b11111100
-            self.write('FR1', FR1_BYTES)
-            #If modulation level is already set to two-level, do nothing
-        else:
-            pass
+        self._write('CFR', CFR_BYTES)
             
-        
-        #Input sweep settings
-            
-            #Set start and end point
-                
-                #Start value into ACR[9:0]
-                #NOTE: For linear sweep, all other settings (for RU/RD) are switched off
+        ######
         ACR_BYTES = [0, 0, 0]
-        
-                #Write start_scale word into register, switching all other amplitude modes off
-        ACR_BYTES[1] = 0x03 & start_ASF >> 8
-        ACR_BYTES[2] = 0x00 | start_ASF
-                #Write to register
-        self.write('ACR', ACR_BYTES)
-        
-                #End value into CTW1[31:22]
-                #NOTE: Must be MSB aligned
         CTW1_BYTES = [0, 0, 0, 0]
-
-                #Write end_scale factor bytes
-        CTW1_BYTES[0] = 0x00 | end_ASF >> 2
-        CTW1_BYTES[1] = 0x03 & end_ASF
-                #Write to register
-        self.write('CTW1', CTW1_BYTES)
-        
-            #Set step size
         RDW_BYTES = [0, 0, 0, 0]
         FDW_BYTES = [0, 0, 0, 0]
-
-                #Write RDW to RDW[31:22], FDW to FDW[31:22]
+        
+        #Write start_scale word into register, switching all other amplitude modes off
+        ACR_BYTES[1] = 0x03 & start_ASF >> 8
+        ACR_BYTES[2] = 0x00 | start_ASF
+        
+        #End value into CTW1[31:22]
+        #NOTE: Must be MSB aligned
+        
+        #Write end_scale factor bytes
+        CTW1_BYTES[0] = 0x00 | end_ASF >> 2
+        CTW1_BYTES[1] = 0x03 & end_ASF
+        
+        #Write RDW to RDW[31:22], FDW to FDW[31:22]
         RDW_BYTES[0] = 0x00 | RDW >> 2
         RDW_BYTES[1] = 0x03 & RDW
         
         FDW_BYTES[0] = 0x00 | FDW >> 2
         FDW_BYTES[1] = 0x03 & FDW
         
-        self.write('RDW', RDW_BYTES)
-        self.write('FDW', FDW_BYTES)
-        
-            #Set Linear Sweep Ramp Rates (LSR):
-        LSR_BYTES = [0, 0]
-        
-                #Write F(alling)SRR in LSR[15:8], R(ising)SRR in LSR[7:0]
-                #RSI_min = 1/(clock_freq/4), RSI_max = 255/(clock_freq/4)
-                #RSRR = clock_freq*RSI/4
-             
-        RSRR = round(RSI*self.clock_freq/4)
-        FSRR = round(FSI*self.clock_freq/4)
+        self._write('CFR', CFR_BYTES)
+        self._write('ACR', ACR_BYTES)
+        self._write('CTW1', CTW1_BYTES)
+        self._write('RDW', RDW_BYTES)
+        self._write('FDW', FDW_BYTES)
 
-        LSR_BYTES[0] = FSRR
-        LSR_BYTES[1] = RSRR
-        
-        self.write('LSR', LSR_BYTES)
-                
-        #IOUPDATE and Start
-        if ioupdate:
-            self.ioupdate()
-            if trigger:
-                PINS = self.select_CHPINS(channels)
-                gpio.output(PINS, 0)
-                gpio.output(PINS, 1)
-        
-    
-    def set_ampsweeptime(self, channels, start_scale, end_scale, sweeptime, \
-                         no_dwell=False, ioupdate=False, trigger=False):
-        """Activates linear amplitude sweep mode. 
-
-        Sweeping from start_scale to end_scale with a duration of sweeptime.
-        To reset amplitude to start_scale after sweep, set no_dwell=True
-        Setting ioupdate=True will issue an ioupdate to write the settings into the DDS registers.
-        Setting trigger=True will immediately trigger the ramp by setting the channel pins to high.
-        Note that trigger only works if ioupdate is also set to True.
-        """
-        
-        step_interval = 1e-6 #1us
-        steps = sweeptime/step_interval #Number of steps
-        step_size = (end_scale-start_scale)/steps
-        
-        self.set_ampsweep(channels, start_scale, end_scale, step_size, step_interval, no_dwell= no_dwell)
-        
-        #IOUPDATE and Start
-        if ioupdate:
-            self.ioupdate()
-            if trigger:
-                PINS = self.select_CHPINS(channels)
-                gpio.output(PINS, 0)
-                gpio.output(PINS, 1)
-    
-    def set_freqsweep(self, channels, start_freq, end_freq, RSS, RSI, FSS='same', FSI='same', \
-                      no_dwell=False, ioupdate=False, trigger=False):
-        """Turns on frequency linear sweep mode and programs the settings as passed.
-
-        channels: single channel or list of channels from [0, 1, 2, 3],
-        start_freq: starting frequency,
-        end_freq: final frequency (start_freq must be < end_freq)
-        RSS: Rising Step Size (frequency steps)
-        RSI: Rising Step Interval (limited by clock frequency, RSI_min = 1/(self.clock_freq/4), RSI_max = 255/(self.clock_freq/4))
-        FSS: Falling Step Size (if not given, takes same value as RSS)
-        FSI: Falling Step Interval (if not given, takes same value as RSI)
-        no_dwell: True turns on no_dwell mode, which clears amplitude after ramp finishes
-        
-        For sweep to take effect, an ioupdate must be issued after inputing parameters.
-        RSS and RSI take effect when the respective channel pin is set to high
-        FSS and FSI take effect when the respective channel pin is set to low
-        
-        Setting ioupdate=True will issue an ioupdate to write the settings into the DDS registers
-        Setting trigger=True will immediately trigger the ramp by setting the channel pins to high.
-        Note that trigger only works if ioupdate is also set to True.
-        """
-        
-        #Assign values if none are given
-        if FSS == 'same': FSS = RSS
-        if FSI == 'same': FSI = RSI   
-        
+    def _init_freq_sweep(self, start_freq, end_freq, RSS, RSI, FSS):   
         FTW_step = self.clock_freq/2**32
         Min_freq = FTW_step
         Max_freq = (2**32-1)*FTW_step
@@ -815,113 +661,47 @@ class AD9959():
         assert end_FTW <= 2**32, 'Maximum end_freq is %r' %Max_freq
         assert RDW <= 2**32, 'Maximum RSS is %r' %Max_freq
         assert FDW <= 2**32, 'Maximum FSS is %r' %Max_freq
-        
-        
-        #Assert RSI and FSI are in allowed ranges. Compute and print allowed ranges.
-        RSI_min = 1/(self.clock_freq/4)
-        RSI_max = 255/(self.clock_freq/4)
-        assert RSI > RSI_min, 'RSI is set below minimum: %r s. To lower minimum, clock frequency needs to be increased' %RSI_min
-        assert FSI > RSI_min, 'FSI is set below minimum: %r s. To lower minimum, clock frequency needs to be increased' %RSI_min
-        assert RSI < RSI_max, 'RSI is set above maximum: %r s. To increase maximum, clock frequency needs to be decreased' %RSI_max
-        assert FSI < RSI_max, 'FSI is set above maximum: %r s. To increase maximum, clock frequency needs to be decreased' %RSI_max
 
-        #Activate selected channels
-        self.set_channels(channels)
 
         #Setting up linear sweep mode
         CFR_BYTES = [0, 0, 0]
-        CFR_initial = self.read('CFR')
-            #Set AFP select to frequency sweep (CFR[23:22]=10)
-        CFR_BYTES[0] = 0x80    
-            #Enable Linear Sweep (CFR[14]=1) (copy last two bits)
+        CFTW0_BYTES = [0, 0, 0, 0]
+        CTW1_BYTES = [0, 0, 0, 0]
+        RDW_BYTES = [0, 0, 0, 0]
+        FDW_BYTES = [0, 0, 0, 0]
+
+        #Setting up linear sweep mode
+        CFR_initial = self._read('CFR')
+
+        #Set AFP select to amplitude sweep (CFR[23:22]=01)
+        CFR_BYTES[0] = 0x80
+        #Enable Linear Sweep (CFR[14]=1) (copy last two bits)
         CFR_BYTES[1] = 0x40 | (0x03 & CFR_initial[1])
-            #Enable no-dwell if true: CFR[15]=1 else 0
+        #Enable no-dwell if true: CFR[15]=1 else 0
         CFR_BYTES[1] = CFR_BYTES[1] | no_dwell << 7
-            #Copy BYTE2 from initial state (More options can be set here. Need to enlarge this function)
+        #Copy BYTE2 from initial state (More options can be set here. Need to enlarge this function)
         CFR_BYTES[2] = CFR_initial[2]
-            #Write bytes to CFR
-        self.write('CFR', CFR_BYTES)
+        #Write bytes to CFR
         
-        #Set modulation level to two-level modulation (FR1[9:8]=00)
-        FR1_BYTES = self.read('FR1')
-        if(FR1_BYTES[1] & 0b00000011):
-            FR1_BYTES[1] = FR1_BYTES[1] & 0b11111100
-            self.write('FR1', FR1_BYTES)
-            #If modulation level is already set to two-level, do nothing
-        else:
-            pass
 
         #Input sweep settings
         #Set start point (in CFTW0)
-        CFTW0_BYTES = [0, 0, 0, 0]
         #Write start_FTW in bytes
         CFTW0_BYTES = [start_FTW.to_bytes(4,'big')[i] for i in range(4)]
-        #Write to register
-        self.write('CFTW0', CFTW0_BYTES)
-        
         #Set end point (in CTW1[31:0])            
-        CTW1_BYTES = [0, 0, 0, 0]
         #Write end_FTW in bytes
         CTW1_BYTES = [end_FTW.to_bytes(4,'big')[i] for i in range(4)]
-        #Write to register
-        self.write('CTW1', CTW1_BYTES)
-        
-        
-        #Set step size
-        RDW_BYTES = [0, 0, 0, 0]
-        FDW_BYTES = [0, 0, 0, 0]
 
         #Write RDW to RDW[31:0], FDW to FDW[31:0]
         RDW_BYTES = [RDW.to_bytes(4,'big')[i] for i in range(4)]
         FDW_BYTES = [FDW.to_bytes(4,'big')[i] for i in range(4)]
-        
-        self.write('RDW', RDW_BYTES)
-        self.write('FDW', FDW_BYTES)
-        
-        #Set Linear Sweep Ramp Rates (LSR):
-        LSR_BYTES = [0, 0]
-        
-        #Write F(alling)SRR in LSR[15:8], R(ising)SRR in LSR[7:0]
-        #RSI_min = 1/(clock_freq/4), RSI_max = 255/(clock_freq/4)
-        #RSRR = clock_freq*RSI/4
-        RSRR = round(RSI*self.clock_freq/4)
-        FSRR = round(FSI*self.clock_freq/4)
 
-        LSR_BYTES[0] = FSRR
-        LSR_BYTES[1] = RSRR
-        
-        self.write('LSR', LSR_BYTES)
-                
-        if ioupdate:
-            self.ioupdate()
-            if trigger:
-                PINS = self.select_CHPINS(channels)
-                gpio.output(PINS, 0)
-                gpio.output(PINS, 1)
-        
-    def set_freqsweeptime(self, channels, start_freq, end_freq, sweeptime, \
-                          no_dwell=False, ioupdate=False, trigger=False):
-        """Activates linear frequency sweep mode. 
-
-        Sweeping from start_freq to end_freq (in Hz) with a duration of sweeptime (in seconds).
-        To reset frequency to start_freq after sweep, set no_dwell=True
-        Setting ioupdate=True will issue an ioupdate to write the settings into the DDS registers
-        Setting trigger=True will immediately trigger the ramp by setting the channel pins to high.
-        Note that trigger only works if ioupdate is also set to True.
-        """
-
-        step_interval = 1e-6 #1us
-        steps = sweeptime/step_interval #Number of steps
-        step_size = abs(end_freq-start_freq)/steps
-        
-        self.set_freqsweep(channels, start_freq, end_freq, step_size, step_interval, no_dwell=no_dwell)
-                
-        if ioupdate:
-            self.ioupdate()
-            if trigger:
-                PINS = self.select_CHPINS(channels)
-                gpio.output(PINS, 0)
-                gpio.output(PINS, 1)
+        self._write('CFR', CFR_BYTES)
+        self._write('CFR', CFR_BYTES)
+        self._write('CFTW0', CFTW0_BYTES)
+        self._write('CTW1', CTW1_BYTES)
+        self._write('RDW', RDW_BYTES)
+        self._write('FDW', FDW_BYTES)
         
     def sweep_loop(self, channels, reps, interval):
         """Initiates a loop of reps PIN toggles with an interval between every toggle. channels indicates which channel PINS should be toggled. Interval indicates the interval between every toggle in seconds.
@@ -957,3 +737,109 @@ class AD9959():
             PINS = _CHPINS[channels]
         
         return PINS
+
+    def _write(self, register, data):
+        """Writes a list of bytes (data) into selected register. 
+
+        Register must be given as a string and must be contained in _registers. data must be given as a list with appropriate number of bytes, as stated in _register_len.
+        """
+        
+        #data: list of bytes to write to register
+        assert register in _registers, '%r is not a valid register. Register must be passed as string.' %register
+        assert len(data) == _register_len[register], 'Must pass %r byte(s) to %r register.' %(_register_len[register], register)
+        
+        # send the register we want to write to
+        self.spi.writebytes([_registers[register]])
+        
+        # send the bytes we write to the register
+        self.spi.writebytes(data)   
+
+    def _read(self, register):
+        """Returns list of bytes (data), currently stored in register. """
+        
+        assert register in _registers, 'Not a valid register. Register must be passed as string.'
+        
+        #send read command to register        
+        self.spi.writebytes([READ | _registers[register]])
+        
+        #return values in register
+        return self.spi.readbytes(_register_len[register])
+
+    def _io_update(self,):
+        """ Toggles IO_UPDATE pin on the RPi to load all commands to the DDS sent since last ioupdate. """
+
+        self._toggle_pin(IOUPDATE_PIN)
+
+    def _toggle_pin(self, pin):
+        gpio.output(pin, 0)
+        gpio.output(pin, 1)
+        gpio.output(pin, 0)
+
+    def _update(self, var, channels, value):
+        """Updates class internal list of output states. """
+
+        if type(channels) is int:
+                channels = [channels]
+
+        if var =='frequency':
+            for channel in channels:
+                self.frequencies[channel] = value
+        elif var =='phase':
+            for channel in channels:
+                self.phases[channel] = value
+        elif var == 'amplitude':
+            for channel in channels:
+                self.amplitudes[channel] = value
+
+    def _convert_frequency(self, frequency):
+        """Convert a frequency to correct spi message. """
+
+        #Assert frequency lies within allowed range
+        FTW_step = self.clock_freq/2**32
+        FTW = round(frequency/FTW_step)
+        Min_freq = FTW_step
+        Max_freq = (2**32-1)*FTW_step
+            
+        assert FTW > 0, 'Minimum frequency is %r' %Min_freq
+        assert FTW <= 2**32, 'Maximum frequency is %r' %Max_freq
+
+        #Compute frequency tuning word for given frequency and clock frequency
+        #Write FTW in list of 4 bytes (CFTW0 is a 32-bit register)
+        return [FTW.to_bytes(4,'big')[i] for i in range(4)]
+
+    def _convert_phase(self, phase):
+        """Convert a phase to correct spi message. """
+
+        assert (phase >= 0 and phase < 359.988), 'Phase must be between 0 and 359.987 degrees'
+
+        #Convert phase into POW
+        POW_step = 0.02197265
+        POW = round(phase/POW_step)
+    
+        #Convert POW into bytes
+        BYTE0 = 0x00 | (POW >> 8)
+        BYTE1 = 0xFF & POW
+        return [BYTE0, BYTE1]
+
+    def _convert_amplitude(self, scale_factor):
+        """Convert an amplitude to correct spi message. """
+
+        initial_state = self._read('ACR')
+
+        if scale_factor == 1:
+            BYTE0 = initial_state[0]
+            BYTE1 = initial_state[1] & 0b11101100
+            BYTE2 = 0x00
+            return [BYTE0, BYTE1, BYTE2]    
+        else:            
+            ASF_step = 1/2**10
+            ASF = round(scale_factor/ASF_step)
+            assert ASF > 0, 'Minimum scale factor is 0.001'
+            assert ASF < 2**10, 'Choose a scale factor equal or below 1'
+                
+            ASF = round(scale_factor/ASF_step)
+            
+            BYTE0 = initial_state[0]
+            BYTE1 = (((initial_state[1] >> 2) & 0b111011) << 2) | 0x10 | (ASF >> 8)
+            BYTE2 = ASF & 0xFF
+            return [BYTE0, BYTE1, BYTE2]
