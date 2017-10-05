@@ -132,8 +132,7 @@ class AD9959():
         self.amplitudes = [1, 1, 1, 1]
         self.phases = [0, 0, 0, 0]
 
-    def set(channels, value, var, io_update=False):
-        scale_factor
+    def set_output(self, channels, value, var, io_update=False):
         """Set frequency, phase or amplitude of selected channel(s). 
         
         # Function description
@@ -177,7 +176,7 @@ class AD9959():
             register = 'ACR'  # Write to 'ACR' register
             data = self._convert_amplitude(value)
 
-        self._write(register, new_state)
+        self._write(register, data)
         self._update(var, channels, value)
 
         if io_update:
@@ -216,9 +215,10 @@ class AD9959():
         Note that trigger only works if ioupdate is also set to True.
         """
         
-        step_interval = 1e-6 #1us
+        step_interval = 2e-6 #1us
         steps = sweeptime/step_interval #Number of steps
         step_size = (end_scale-start_scale)/steps
+        print(steps)
         
         self._init_sweep(scan_type='amplitude', channels=channels, start_val=start_scale, end_val=end_scale, RSS=step_size, RSI=step_interval, no_dwell=no_dwell)
         
@@ -546,9 +546,9 @@ class AD9959():
         #Input sweep settings
 
         if scan_type == 'frequency':
-            self._init_freq_sweep(start_val, end_val, RSS, RSI, FSS)
+            self._init_freq_sweep(start_val, end_val, RSS, FSS, no_dwell)
         elif scan_type == 'amplitude':
-            self._init_amp_sweep(start_val, end_val, RSS, RSI, FSS)
+            self._init_amp_sweep(start_val, end_val, RSS, FSS, no_dwell)
 
         #Set Linear Sweep Ramp Rates (LSR):
         LSR_BYTES = [0, 0]
@@ -573,7 +573,7 @@ class AD9959():
                 gpio.output(PINS, 1)
             
 
-    def _init_amp_sweep(self, start_scale, end_scale, RSS, FSS): 
+    def _init_amp_sweep(self, start_scale, end_scale, RSS, FSS, no_dwell): 
         #Assert start_scale, end_scale, RSS and FSS are between min and max values, like in set_amplitude
         ASF_step = 1/(2**10 - 1) #Corrected bug. ASF_step must not be 1/2**10 to avoid writing 11 bits into 10 bit register, when setting scale to 1.
         
@@ -638,7 +638,7 @@ class AD9959():
         self._write('RDW', RDW_BYTES)
         self._write('FDW', FDW_BYTES)
 
-    def _init_freq_sweep(self, start_freq, end_freq, RSS, RSI, FSS):   
+    def _init_freq_sweep(self, start_freq, end_freq, RSS, FSS, no_dwell):   
         FTW_step = self.clock_freq/2**32
         Min_freq = FTW_step
         Max_freq = (2**32-1)*FTW_step
