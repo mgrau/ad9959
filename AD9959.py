@@ -31,18 +31,19 @@ gpio.setup(PIN_2, gpio.OUT)
 gpio.setup(PIN_3, gpio.OUT)
 
 #Registers
+# Linear sweep: FR1[9:8] = 00, ADF -> what type of sweep, CFR[14]=1
 _registers = {
-'CSR'               :0x00,
-'FR1'               :0x01,
+'CSR'               :0x00, # channel select
+'FR1'               :0x01, # 22:18--PLL Divider ratio, 14:12--profile pin config, 11:10--Ramp up/down, 9-8--modulation level, 6--power-down bit
 'FR2'               :0x02,
-'CFR'               :0x03,
-'CFTW0'             :0x04,
-'CPOW0'             :0x05,
-'ACR'               :0x06,
-'LSR'               :0x07,
-'RDW'               :0x08,
-'FDW'               :0x09,
-'CTW1'              :0x0A,
+'CFR'               :0x03,   #(channel function register) 23:22--AFP select bits, 15--no-dwell, 14--linear sweep enable, 7:6--power-down control bits
+'CFTW0'             :0x04,   # channel word 0 register (frequency sweep?)
+'CPOW0'             :0x05,  # phase offset
+'ACR'               :0x06,  # amplitude control register
+'LSR'               :0x07,  # rising/falling sweep ramp rate
+'RDW'               :0x08,  # rising delta 
+'FDW'               :0x09, # falling delta
+'CTW1'              :0x0A, # channel word 1 register
 'CTW2'              :0x0B,
 'CTW3'              :0x0C,
 'CTW4'              :0x0D,
@@ -163,7 +164,7 @@ class AD9959():
         #Turn off linear sweep
         BYTE1 = self._read('CFR')[1] & 0x03
         self._write('CFR', [0x00, BYTE1, self._read('CFR')[2]])
-
+        
         if var == 'frequency':
             register = 'CFTW0'  #Write FTW to CFTW0 register
             data = self._convert_frequency(value)
@@ -196,7 +197,7 @@ class AD9959():
         steps = sweeptime/step_interval #Number of steps
         step_size = abs(end_freq-start_freq)/steps
         
-        self._init_sweep(scan_type='frequency', channels=channels, start_val=start_freq, end_val=end_freq, RSS=step_size, RSI=step_interval, no_dwell=no_dwell)
+        self._init_sweep(scan_type='frequency', channels=channels, start_val=start_freq, end_val=end_freq, RSS=step_size, RSI=step_interval, no_dwell=no_dwell, ioupdate=ioupdate, trigger=trigger)
                 
         if ioupdate:
             self._io_update()
@@ -220,7 +221,7 @@ class AD9959():
         step_size = (end_scale-start_scale)/steps
         print(steps)
         
-        self._init_sweep(scan_type='amplitude', channels=channels, start_val=start_scale, end_val=end_scale, RSS=step_size, RSI=step_interval, no_dwell=no_dwell)
+        self._init_sweep(scan_type='amplitude', channels=channels, start_val=start_scale, end_val=end_scale, RSS=step_size, RSI=step_interval, no_dwell=no_dwell, ioupdate=ioupdate, trigger=trigger)
         
         #IOUPDATE and Start
         if ioupdate:
@@ -540,11 +541,8 @@ class AD9959():
         if(FR1_BYTES[1] & 0b00000011):
             FR1_BYTES[1] = FR1_BYTES[1] & 0b11111100
             self._write('FR1', FR1_BYTES)
-            #If modulation level is already set to two-level, do nothing
-        else:
-            pass
-        #Input sweep settings
 
+        #Input sweep settings
         if scan_type == 'frequency':
             self._init_freq_sweep(start_val, end_val, RSS, FSS, no_dwell)
         elif scan_type == 'amplitude':
@@ -569,9 +567,7 @@ class AD9959():
             self._io_update()
             if trigger:
                 PINS = self.select_CHPINS(channels)
-                gpio.output(PINS, 0)
-                gpio.output(PINS, 1)
-            
+                self._toggle_pin(PINS)   
 
     def _init_amp_sweep(self, start_scale, end_scale, RSS, FSS, no_dwell): 
         #Assert start_scale, end_scale, RSS and FSS are between min and max values, like in set_amplitude
@@ -603,6 +599,7 @@ class AD9959():
         CFR_BYTES[1] = 0x40 | (0x03 & CFR_initial[1])
             #Enable no-dwell if true: CFR[15]=1 else 0
         CFR_BYTES[1] = CFR_BYTES[1] | no_dwell << 7
+        
             #Copy BYTE2 from initial state (More options can be set here. Need to enlarge this function)
         CFR_BYTES[2] = CFR_initial[2]
             #Write bytes to CFR
@@ -643,9 +640,7 @@ class AD9959():
         Min_freq = FTW_step
         Max_freq = (2**32-1)*FTW_step
         
-         #Asserts
-            #Assert start_freq, end_freq, RSS and FSS are between min and max values, like in set_frequency
-        
+         #Assert start_freq, end_freq, RSS and FSS are between min and max values, like in set_frequency
         start_FTW = round(start_freq/FTW_step)
         assert start_FTW > 0, 'Minimum start_freq is %r' %Min_freq
         end_FTW = round(end_freq/FTW_step)
@@ -656,12 +651,10 @@ class AD9959():
         assert FDW > 0, 'Minimum FSS is %r' %Min_freq
         
         assert start_FTW < end_FTW, 'start_freq must be smaller than end_freq'
-        
         assert start_FTW <= 2**32, 'Maximum start_freq is %r' %Max_freq
         assert end_FTW <= 2**32, 'Maximum end_freq is %r' %Max_freq
         assert RDW <= 2**32, 'Maximum RSS is %r' %Max_freq
         assert FDW <= 2**32, 'Maximum FSS is %r' %Max_freq
-
 
         #Setting up linear sweep mode
         CFR_BYTES = [0, 0, 0]
@@ -673,7 +666,7 @@ class AD9959():
         #Setting up linear sweep mode
         CFR_initial = self._read('CFR')
 
-        #Set AFP select to amplitude sweep (CFR[23:22]=01)
+        #Set AFP select to amplitude sweep (CFR[23:22]=10)
         CFR_BYTES[0] = 0x80
         #Enable Linear Sweep (CFR[14]=1) (copy last two bits)
         CFR_BYTES[1] = 0x40 | (0x03 & CFR_initial[1])
@@ -681,8 +674,6 @@ class AD9959():
         CFR_BYTES[1] = CFR_BYTES[1] | no_dwell << 7
         #Copy BYTE2 from initial state (More options can be set here. Need to enlarge this function)
         CFR_BYTES[2] = CFR_initial[2]
-        #Write bytes to CFR
-        
 
         #Input sweep settings
         #Set start point (in CFTW0)
@@ -696,7 +687,6 @@ class AD9959():
         RDW_BYTES = [RDW.to_bytes(4,'big')[i] for i in range(4)]
         FDW_BYTES = [FDW.to_bytes(4,'big')[i] for i in range(4)]
 
-        self._write('CFR', CFR_BYTES)
         self._write('CFR', CFR_BYTES)
         self._write('CFTW0', CFTW0_BYTES)
         self._write('CTW1', CTW1_BYTES)
@@ -770,6 +760,12 @@ class AD9959():
 
         self._toggle_pin(IOUPDATE_PIN)
 
+    def pin_high(self, pin):
+        gpio.output(pin, 1)
+        
+    def pin_low(self, pin):
+        gpio.output(pin, 0)
+    
     def _toggle_pin(self, pin):
         gpio.output(pin, 0)
         gpio.output(pin, 1)
