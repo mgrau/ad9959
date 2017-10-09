@@ -1,0 +1,27 @@
+<!doctype html>
+<title>AD9959 DDS</title>
+<link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}">
+<div class=page>
+    <h1>AD9959 DDS</h1>
+
+    {% for message in get_flashed_messages() %}
+        <div class=flash>{{ message }}</div>
+    {% endfor %}
+
+    {% for channel in channels %}
+        <form action="{{ url_for('set_APF', channel=channel['id']) }}" method=post>
+        <dl>
+            <h2>Channel {{ channel['id'] }}</h2>
+            <dt>Amplitude:</dt>
+            <dd><input name="amplitude_{{ channel['id'] }}" type=number value="{{ channel['amplitude'] }}"/></dd>
+            <dt>Phase:</dt>
+            <dd><input name="phase_{{ channel['id'] }}" type=number value="{{ channel['phase'] }}"/></dd>
+            <dt>Frequency:</dt>
+            <dd><input name="frequency_{{ channel['id'] }}" type=number value="{{ channel['frequency'] }}"/></dd>
+            <dd><input type=submit value="Update channel {{ channel['id'] }}">
+        </dl>
+        </form>
+    {% endfor %}
+
+    </div>
+</div>

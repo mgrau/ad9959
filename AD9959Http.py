@@ -30,16 +30,54 @@ auto = Autodoc(app)
 
 DDS = AD9959()
 
-@app.route('/set_ffpa', methods=['POST', 'GET'])
-@auto.doc('public')
-def fpa():
-    pass
+@app.route('/')
+def index():
+    channels = []
+    for i in range(4):
+        channels.append({'id': i, 'frequency': DDS.frequencies[i] / 1e6, 
+                         'phase': DDS.phases[i], 'amplitude': DDS.amplitudes[i]})
 
+    return flask.render_template('dds.html', channels=channels)
 
+@app.route('/set_apf/<int:channel>', methods=['POST', 'GET'])
+def set_APF(channel):
+    r = flask.request.form
+    amplitude = float(r['amplitude'])
+    phase = float(r['phase'])
+    frequency = float(r['frequency'])\
+
+    print('setting amplitude=%g, phase=%g, frequency=%g for channel %d' % (amplitude, phase, frequency, channel))
+    set_frequency(channel, frequency*1e6)
+    
+    return flask.redirect(flask.url_for('index'))
+
+def set_frequency(channel, frequency):
+    dt = 50e-3 # ramp time.
+
+    channel = int(channel)
+        f1 = float(f1)
+        
+        f0 = DDS.frequencies[channel]
+
+        if f0 > 0:
+            if f0 < f1:
+                DDS.set_ramp_direction(channels=channel, direction='RD')
+                DDS.set_freqsweeptime(channels=channel, start_freq=f0, end_freq=f1, sweeptime=dt, no_dwell=False, ioupdate=True, trigger=False)
+                DDS.set_ramp_direction(channels=channel, direction='RU')
+            else:
+                DDS.set_ramp_direction(channels=channel, direction='RU')
+                DDS.set_freqsweeptime(channels=channel, start_freq=f1, end_freq=f0, sweeptime=1e-6, no_dwell=False, ioupdate=True, trigger=False)
+                DDS.set_freqsweeptime(channels=channel, start_freq=f1, end_freq=f0, sweeptime=dt, no_dwell=False, ioupdate=True, trigger=False)
+                DDS.set_ramp_direction(channels=channel, direction='RD')
+
+        time.sleep(dt)
+        DDS.set_output(channels=channel, value=f1, var='frequency', io_update=True)
+
+        return
 
 @app.route('/set_frequency', methods=['POST', 'GET'])
 @auto.doc('public')
-def outputs():
+def set_frequency_output():
     """Set the frequency output of the DDS
 
     # Function description
@@ -58,36 +96,12 @@ def outputs():
 
     input_data = flask.request.args.to_dict()
 
-    dt = 50e-3 # ramp time.
-
-    for channel, f1 in input_data.items():
-        channel = int(channel)
-        f1 = float(f1)
+    for channel, frequency in input_data.items():
+        set_frequency(channel, frequency)
         
-        f0 = DDS.frequencies[channel]
-
-        if f0 > 0:
-            if f0 < f1:
-                DDS.set_ramp_direction(channels=channel, direction='RD')
-                DDS.set_freqsweeptime(channels=channel, start_freq=f0, end_freq=f1, sweeptime=dt, no_dwell=False, ioupdate=True, trigger=False)
-                DDS.set_ramp_direction(channels=channel, direction='RU')
-            else:
-                DDS.set_ramp_direction(channels=channel, direction='RU')
-                DDS.set_freqsweeptime(channels=channel, start_freq=f1, end_freq=f0, sweeptime=1e-6, no_dwell=False, ioupdate=True, trigger=False)
-                DDS.set_freqsweeptime(channels=channel, start_freq=f1, end_freq=f0, sweeptime=dt, no_dwell=False, ioupdate=True, trigger=False)
-                DDS.set_ramp_direction(channels=channel, direction='RD')
-
-        time.sleep(dt)
-        DDS.set_output(channels=channel, value=f1, var='frequency', io_update=True)
-        resp = DDS.frequencies
+    resp = DDS.frequencies
 
     return json.dumps(resp)
-
-@app.route('/')
-def redirect():
-    """Redirects to documentation. """
-
-    return flask.redirect('/doc')
 
 @app.route('/doc')
 def documentation():
@@ -95,6 +109,13 @@ def documentation():
 
     return auto.html('public', title='AD5764 doc')
 
+@app.route('/shutdown', methods=['POST', 'GET'])
+def shutdown():
+    func = flask.request.environ.get('werkzeug.server.shutdown')
+    if func is None:
+        raise RuntimeError('Not running with the Werkzeug Server')
+    func()
+    return 'Server shutting down...'
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
