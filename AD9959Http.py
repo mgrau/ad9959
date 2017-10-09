@@ -42,9 +42,9 @@ def index():
 @app.route('/set_apf/<int:channel>', methods=['POST', 'GET'])
 def set_APF(channel):
     r = flask.request.form
-    amplitude = float(r['amplitude'])
-    phase = float(r['phase'])
-    frequency = float(r['frequency'])\
+    amplitude = float(r['amplitude_' + str(channel)])
+    phase = float(r['phase_' + str(channel)])
+    frequency = float(r['frequency_' + str(channel)])
 
     print('setting amplitude=%g, phase=%g, frequency=%g for channel %d' % (amplitude, phase, frequency, channel))
     set_frequency(channel, frequency*1e6)
@@ -55,25 +55,25 @@ def set_frequency(channel, frequency):
     dt = 50e-3 # ramp time.
 
     channel = int(channel)
-        f1 = float(f1)
-        
-        f0 = DDS.frequencies[channel]
+    f1 = float(frequency)
+    
+    f0 = DDS.frequencies[channel]
 
-        if f0 > 0:
-            if f0 < f1:
-                DDS.set_ramp_direction(channels=channel, direction='RD')
-                DDS.set_freqsweeptime(channels=channel, start_freq=f0, end_freq=f1, sweeptime=dt, no_dwell=False, ioupdate=True, trigger=False)
-                DDS.set_ramp_direction(channels=channel, direction='RU')
-            else:
-                DDS.set_ramp_direction(channels=channel, direction='RU')
-                DDS.set_freqsweeptime(channels=channel, start_freq=f1, end_freq=f0, sweeptime=1e-6, no_dwell=False, ioupdate=True, trigger=False)
-                DDS.set_freqsweeptime(channels=channel, start_freq=f1, end_freq=f0, sweeptime=dt, no_dwell=False, ioupdate=True, trigger=False)
-                DDS.set_ramp_direction(channels=channel, direction='RD')
+    if f0 > 0 and f1 != f0:
+        if f0 < f1:
+            DDS.set_ramp_direction(channels=channel, direction='RD')
+            DDS.set_freqsweeptime(channels=channel, start_freq=f0, end_freq=f1, sweeptime=dt, no_dwell=False, ioupdate=True, trigger=False)
+            DDS.set_ramp_direction(channels=channel, direction='RU')
+        else:
+            DDS.set_ramp_direction(channels=channel, direction='RU')
+            DDS.set_freqsweeptime(channels=channel, start_freq=f1, end_freq=f0, sweeptime=1e-6, no_dwell=False, ioupdate=True, trigger=False)
+            DDS.set_freqsweeptime(channels=channel, start_freq=f1, end_freq=f0, sweeptime=dt, no_dwell=False, ioupdate=True, trigger=False)
+            DDS.set_ramp_direction(channels=channel, direction='RD')
 
-        time.sleep(dt)
-        DDS.set_output(channels=channel, value=f1, var='frequency', io_update=True)
+    time.sleep(dt)
+    DDS.set_output(channels=channel, value=f1, var='frequency', io_update=True)
 
-        return
+    return True
 
 @app.route('/set_frequency', methods=['POST', 'GET'])
 @auto.doc('public')
