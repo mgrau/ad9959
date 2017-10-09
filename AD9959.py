@@ -760,6 +760,15 @@ class AD9959():
 
         self._toggle_pin(IOUPDATE_PIN)
 
+    def set_ramp_direction(self, channels, direction):
+        PINS = self.select_CHPINS(channels)
+
+        if direction == 'RU':
+            gpio.output(PINS, 1)
+        elif direction == 'RD':
+            gpio.output(PINS, 0)
+
+
     def pin_high(self, pin):
         gpio.output(pin, 1)
         
