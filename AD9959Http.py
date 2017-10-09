@@ -17,6 +17,7 @@ For starting the server use (export instead of set in linux)
 set FLASK_APP=<filename>
 (set FLASK_DEBUG=True)
 python -m flask run.
+
 """
 
 import flask
@@ -35,7 +36,7 @@ def index():
     channels = []
     for i in range(4):
         channels.append({'id': i, 'frequency': DDS.frequencies[i] / 1e6, 
-                         'phase': DDS.phases[i], 'amplitude': DDS.amplitudes[i]})
+                         'phase': DDS.phases[i], 'amplitude': DDS.amplitudes[i] * 100})
 
     return flask.render_template('dds.html', channels=channels)
 
@@ -43,13 +44,21 @@ def index():
 def set_APF(channel):
     r = flask.request.form
     amplitude = float(r['amplitude_' + str(channel)])
-    phase = float(r['phase_' + str(channel)])
+    #phase = float(r['phase_' + str(channel)])
     frequency = float(r['frequency_' + str(channel)])
 
-    print('setting amplitude=%g, phase=%g, frequency=%g for channel %d' % (amplitude, phase, frequency, channel))
+    #print('setting amplitude=%g, phase=%g, frequency=%g for channel %d' % (amplitude, phase, frequency, channel))
     set_frequency(channel, frequency*1e6)
-    set_amplitude(channel, amplitude)
+    set_amplitude(channel, amplitude/100)
+    # there seems to be a bug which sets the current scaling to 8 when changing the frequency after the amplitude was set lower than 1.
+    DDS.set_current([0, 1, 2, 3], 1, ioupdate=True)
+    DDS.get_current()
     
+    return flask.redirect(flask.url_for('index'))
+    
+@app.route('/reset', methods=['POST', 'GET'])
+def reset_DDS():
+    DDS.init_dds()
     return flask.redirect(flask.url_for('index'))
 
 def set_frequency(channel, frequency):
@@ -83,7 +92,7 @@ def set_amplitude(channel, amplitude):
     try:
         DDS.set_output(channels=channel, value=amplitude, var='amplitude', io_update=True)
     except AssertionError as e:
-        print(e[0])
+        print(e)
 
     return True
 

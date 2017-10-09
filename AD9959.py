@@ -1,5 +1,10 @@
+"""
 #NOTE: Need to set up RPi Ref Clock first by running:
 #   ./minimal_clk 50.0M -q in [root@tiqi-pi ~]
+
+### Known Bugs
+* When setting the amplitude scaling factor below 1 and then changing the frequency, the current divider will be set to 8. Hence, use set_current([0,1,2,3], 1, ioupdate=True) after every update of the frequency.
+"""
 
 import spidev 
 import RPi.GPIO as gpio
@@ -476,7 +481,7 @@ class AD9959():
         if ioupdate:
             self._io_update()
 
-    def get_current(self,):           
+    def get_current(self):           
         """Returns the current values set in all channels as a list. 
 
         The values' position indicate the corresponding channel: [CH0, CH1, CH2, CH3]
