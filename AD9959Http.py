@@ -61,22 +61,25 @@ def outputs():
     dt = 50e-3 # ramp time.
 
     for channel, f1 in input_data.items():
+        channel = int(channel)
+        f1 = float(f1)
+        
         f0 = DDS.frequencies[channel]
 
         if f0 > 0:
             if f0 < f1:
-                dds.set_ramp_direction(channels=channel, direction='RD')
+                DDS.set_ramp_direction(channels=channel, direction='RD')
                 DDS.set_freqsweeptime(channels=channel, start_freq=f0, end_freq=f1, sweeptime=dt, no_dwell=False, ioupdate=True, trigger=False)
-                dds.set_ramp_direction(channels=channel, direction='RU')
+                DDS.set_ramp_direction(channels=channel, direction='RU')
             else:
-                dds.set_ramp_direction(channels=channel, direction='RU')
+                DDS.set_ramp_direction(channels=channel, direction='RU')
                 DDS.set_freqsweeptime(channels=channel, start_freq=f1, end_freq=f0, sweeptime=1e-6, no_dwell=False, ioupdate=True, trigger=False)
                 DDS.set_freqsweeptime(channels=channel, start_freq=f1, end_freq=f0, sweeptime=dt, no_dwell=False, ioupdate=True, trigger=False)
-                dds.set_ramp_direction(channels=channel, direction='RD')
+                DDS.set_ramp_direction(channels=channel, direction='RD')
 
         time.sleep(dt)
-        dds.set_output(channels=channel, value=f1, var='frequency', io_update=True)
-        resp = dds.frequencies
+        DDS.set_output(channels=channel, value=f1, var='frequency', io_update=True)
+        resp = DDS.frequencies
 
     return json.dumps(resp)
 
