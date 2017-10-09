@@ -48,6 +48,7 @@ def set_APF(channel):
 
     print('setting amplitude=%g, phase=%g, frequency=%g for channel %d' % (amplitude, phase, frequency, channel))
     set_frequency(channel, frequency*1e6)
+    set_amplitude(channel, amplitude)
     
     return flask.redirect(flask.url_for('index'))
 
@@ -72,6 +73,17 @@ def set_frequency(channel, frequency):
 
     time.sleep(dt)
     DDS.set_output(channels=channel, value=f1, var='frequency', io_update=True)
+
+    return True
+
+def set_amplitude(channel, amplitude):
+    channel = int(channel)
+    amplitude = float(amplitude)
+
+    try:
+        DDS.set_output(channels=channel, value=amplitude, var='amplitude', io_update=True)
+    except AssertionError as e:
+        print(e[0])
 
     return True
 
@@ -100,6 +112,34 @@ def set_frequency_output():
         set_frequency(channel, frequency)
         
     resp = DDS.frequencies
+
+    return json.dumps(resp)
+
+@app.route('/set_amplitude', methods=['POST', 'GET'])
+@auto.doc('public')
+def set_amplitude_output():
+    """Set the amplitude of the DDS
+
+    # Function description
+    
+
+    ### Arguments:
+    * `input_data` -- dict {<channel number>: <amplitude>}
+                            <channel number> must be 0, 1, 2, or 3
+                            <amplitude> must be between 0.001 and 1
+
+    Returns (for GET and POST):
+    dict {<channel name>: <voltage>}
+          <channel name> 'A', 'B', 'C' and 'D'. 
+          <voltage> in [-10 V, 10 V].
+    """
+
+    input_data = flask.request.args.to_dict()
+
+    for channel, amplitude in input_data.items():
+        set_amplitude(channel, amplitude)
+        
+    resp = DDS.amplitudes
 
     return json.dumps(resp)
 
