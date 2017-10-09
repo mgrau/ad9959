@@ -162,8 +162,10 @@ class AD9959():
         self._set_channels(channels)
 
         #Turn off linear sweep
-        BYTE1 = self._read('CFR')[1] & 0x03
-        self._write('CFR', [0x00, BYTE1, self._read('CFR')[2]])
+        cfr_bytes = self._read('CFR')
+        cfr_bytes[0] = 0
+        cfr_bytes[1] &= 0x03 # sets everything except for the last 2 bits to 0
+        self._write('CFR', cfr_bytes)
         
         if var == 'frequency':
             register = 'CFTW0'  #Write FTW to CFTW0 register
@@ -829,22 +831,22 @@ class AD9959():
     def _convert_amplitude(self, scale_factor):
         """Convert an amplitude to correct spi message. """
 
-        initial_state = self._read('ACR')
+        # acr_state[0] -- amplitude ramp rate. Using default.
+        # acr_state[1][4] = 0 -- bypassing amp. scale factor (manual mode acr_state[1][4:3] = 10)
+        # acr_state[2] -- amplitude scale factor (controls ru/rd time)
 
-        if scale_factor == 1:
-            BYTE0 = initial_state[0]
-            BYTE1 = initial_state[1] & 0b11101100
-            BYTE2 = 0x00
-            return [BYTE0, BYTE1, BYTE2]    
-        else:            
-            ASF_step = 1/2**10
-            ASF = round(scale_factor/ASF_step)
-            assert ASF > 0, 'Minimum scale factor is 0.001'
-            assert ASF < 2**10, 'Choose a scale factor equal or below 1'
-                
-            ASF = round(scale_factor/ASF_step)
-            
-            BYTE0 = initial_state[0]
-            BYTE1 = (((initial_state[1] >> 2) & 0b111011) << 2) | 0x10 | (ASF >> 8)
-            BYTE2 = ASF & 0xFF
-            return [BYTE0, BYTE1, BYTE2]
+        acr_state = self._read('ACR')
+
+        assert 0 <= scale_factor <= 1, 'Choose a scale factor in [0,1]'
+
+        #if scale_factor == 1: # sets ASF = 0 and disables the multiplier
+        #    acr_state[1] &= 0b11101100
+        #    acr_state[2] = 0
+        #else:   
+
+        ASF = round((2**10-1) * scale_factor) # amplitude scale factor
+        acr_state[1] |= 0b00010000 # enable amplitude multiplier
+        acr_state[1] = (acr_state[1] & 0b11111100) + (ASF >> 8)  # write two MSB of scale factor to byte 1
+        acr_state[2] = ASF & 0xFF  # write remaining 8 bits of scale factor to byte 2
+        
+        return acr_state
