@@ -12,16 +12,20 @@
         <form action="{{ url_for('set_APF', channel=channel['id']) }}" method=post>
         <dl>
             <h2>Channel {{ channel['id'] }}</h2>
-            <dt>Amplitude:</dt>
+            <dt>Amplitude (%):</dt>
             <dd><input name="amplitude_{{ channel['id'] }}" type=number value="{{ channel['amplitude'] }}"/></dd>
+            <!--
             <dt>Phase:</dt>
             <dd><input name="phase_{{ channel['id'] }}" type=number value="{{ channel['phase'] }}"/></dd>
-            <dt>Frequency:</dt>
+            -->
+            <dt>Frequency (MHz):</dt>
             <dd><input name="frequency_{{ channel['id'] }}" type=number value="{{ channel['frequency'] }}"/></dd>
             <dd><input type=submit value="Update channel {{ channel['id'] }}">
         </dl>
         </form>
     {% endfor %}
-
+    
+     <form action="{{ url_for('reset_DDS') }}" method=post>
+    <input type=submit value="Reset DDS">
     </div>
 </div>
