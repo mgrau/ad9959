@@ -47,12 +47,8 @@ def set_APF(channel):
     #phase = float(r['phase_' + str(channel)])
     frequency = float(r['frequency_' + str(channel)])
 
-    #print('setting amplitude=%g, phase=%g, frequency=%g for channel %d' % (amplitude, phase, frequency, channel))
     set_frequency(channel, frequency*1e6)
     set_amplitude(channel, amplitude/100)
-    # there seems to be a bug which sets the current scaling to 8 when changing the frequency after the amplitude was set lower than 1.
-    DDS.set_current([0, 1, 2, 3], 1, ioupdate=True)
-    DDS.get_current()
     
     return flask.redirect(flask.url_for('index'))
     

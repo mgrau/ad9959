@@ -3,7 +3,7 @@
 #   ./minimal_clk 50.0M -q in [root@tiqi-pi ~]
 
 ### Known Bugs
-* When setting the amplitude scaling factor below 1 and then changing the frequency, the current divider will be set to 8. Hence, use set_current([0,1,2,3], 1, ioupdate=True) after every update of the frequency.
+* There seems to be a bug at hardware level when sweeping the frequency at an amplitude scaling < 1. The correct current divider scaling is written to the 'CFR' register when initializing the frequency sweep, but after an _io_update call, the value in that register is 0 (i.e. current scaling of 8). By resetting the current scaling right after the _io_update call, this bug is fixed.
 """
 
 import spidev 
@@ -204,14 +204,17 @@ class AD9959():
         steps = sweeptime/step_interval #Number of steps
         step_size = abs(end_freq-start_freq)/steps
         
-        self._init_sweep(scan_type='frequency', channels=channels, start_val=start_freq, end_val=end_freq, RSS=step_size, RSI=step_interval, no_dwell=no_dwell, ioupdate=ioupdate, trigger=trigger)
+        self._init_sweep(scan_type='frequency', channels=channels, start_val=start_freq, end_val=end_freq, RSS=step_size, RSI=step_interval, no_dwell=no_dwell)
                 
         if ioupdate:
             self._io_update()
+            # there seems to be a bug. See namespace docstring for details. This line fixes it.
+            self.set_current([0, 1, 2, 3], 1, ioupdate=True)
             if trigger:
                 PINS = self.select_CHPINS(channels)
                 gpio.output(PINS, 0)
                 gpio.output(PINS, 1)
+                
 
     def set_ampsweeptime(self, channels, start_scale, end_scale, sweeptime, no_dwell=False, ioupdate=False, trigger=False):
         """Activates linear amplitude sweep mode. 
@@ -373,8 +376,7 @@ class AD9959():
                  frequency between 100MHz and 500MHz')
         print ('Refclock =', "{:.2e}".format(frequency), 'Hz \nFreqmult =', self.freqmult,
                '\nClock Frequency =', "{:.2e}".format(self.clock_freq), 'Hz')
-        
-        
+                
     def set_freqmult(self, freqmult, ioupdate=False):
         """ Sets the frequency multiplier on the DDS.
 
@@ -507,7 +509,7 @@ class AD9959():
         # Returns values saved in set_current
         return self.currents
     
-    def _init_sweep(self, scan_type, channels, start_val, end_val, RSS, RSI, FSS='same', FSI='same', no_dwell=False, ioupdate=False, trigger=False):
+    def _init_sweep(self, scan_type, channels, start_val, end_val, RSS, RSI, FSS='same', FSI='same', no_dwell=False):
         """Turns on amplitude or frequency linear sweep mode and programs the settings as passed.
 
         channels: single channel or list of channels from [0, 1, 2, 3],
@@ -568,13 +570,6 @@ class AD9959():
         LSR_BYTES[1] = RSRR
         
         self._write('LSR', LSR_BYTES)
-                
-        #IOUPDATE and Start
-        if ioupdate:
-            self._io_update()
-            if trigger:
-                PINS = self.select_CHPINS(channels)
-                self._toggle_pin(PINS)   
 
     def _init_amp_sweep(self, start_scale, end_scale, RSS, FSS, no_dwell): 
         #Assert start_scale, end_scale, RSS and FSS are between min and max values, like in set_amplitude
@@ -774,13 +769,6 @@ class AD9959():
             gpio.output(PINS, 1)
         elif direction == 'RD':
             gpio.output(PINS, 0)
-
-
-    def pin_high(self, pin):
-        gpio.output(pin, 1)
-        
-    def pin_low(self, pin):
-        gpio.output(pin, 0)
     
     def _toggle_pin(self, pin):
         gpio.output(pin, 0)
