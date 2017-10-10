@@ -70,7 +70,6 @@ except FileNotFoundError:
         json.dump(web_settings, f)
 
 """ ~~~Internal function~~~ """
-
 def get_dds_state():
     """ Gets frequency,amplitude and phase of each channel. """
 
@@ -79,7 +78,7 @@ def get_dds_state():
         channels.append({'id': str(i), 'frequency': DDS.frequencies[i] / 1e6, 
                          'phase': DDS.phases[i], 'amplitude': DDS.amplitudes[i] * 100})
     return channels
-
+    
 def set_frequency(channel, frequency):
     """Smooth transition of the frequency output of one channel to a new value.
     
@@ -103,7 +102,7 @@ def set_frequency(channel, frequency):
     try:
         f1 = float(frequency)
     except ValueError:
-        return 'Cannot convert <' + str(f1) + '> to float.'
+        return 'Cannot convert <' + str(frequency) + '> to float.'
 
     f0 = DDS.frequencies[channel]
 
@@ -155,7 +154,7 @@ def set_amplitude(channel, amplitude):
     try:
         DDS.set_output(channels=channel, value=amplitude, var='amplitude', io_update=True)
     except AssertionError as ae:
-        return 'Error in set_amplitude. Message: ' + ar.args[0]
+        return 'Error in set_amplitude. Message: ' + ae.args[0]
 
     return False
 
@@ -196,8 +195,6 @@ def set_APF(channel):
     
     return flask.redirect(flask.url_for('index'))
 
-""" ~~~API functions~~~ """
-
 @app.route('/reset', methods=['POST', 'GET'])
 @auto.doc('public')
 def reset_DDS():
@@ -206,6 +203,28 @@ def reset_DDS():
     DDS.init_dds()
     return flask.redirect(flask.url_for('index'))
 
+""" ~~~API functions~~~ """
+
+@app.route('/outputs')
+@auto.doc('public')
+def get_outputs():
+    """Returns the output of each DDS channel. 
+    
+    ### Returns
+    json({<channel number>: {'frequency': <frequency>, 'amplitude': <amplitude>, 'name': <displayed name>})  with the following variables
+    * `channel number` -- Physical number of the channel in [0, 1, 2, 3].
+    * `frequency` -- Frequency in Hz.
+    * `amplitude` -- Amplitude scaling factor between 0 (no output) and 1 (maximum output).
+    * `displayed name` -- The name of the channel displayed in the web interface.
+    """
+    
+    channels = get_dds_state()
+    resp = {}
+    for item in channels:
+        resp[item['id']] = {'frequency': item['frequency'] * 1e6, 'amplitude': item['amplitude'], 'name': web_settings['channel names'][item['id']]}
+    
+    return json.dumps(resp)
+    
 @app.route('/set_frequency', methods=['POST', 'GET'])
 @auto.doc('public')
 def set_frequency_output():
@@ -227,9 +246,9 @@ def set_frequency_output():
     for channel, frequency in input_data.items():
         err = set_frequency(channel, frequency)
         if err:
-            return json.dumps(err)
+            return json.dumps({'error': err})
 
-    return json.dumps(get_dds_state())
+    return get_outputs()
 
 @app.route('/set_amplitude', methods=['POST', 'GET'])
 @auto.doc('public')
@@ -237,7 +256,7 @@ def set_amplitude_output():
     """Set the amplitude of the DDS
 
     # Function description
-     Set the amplitdude output of the AD9959. The output of each channel will be continuously ramped from the initial amplitude to the set value.
+     Set the amplitude output of the AD9959. The output of each channel will be continuously ramped from the initial amplitude to the set value.
 
     ### Arguments
     * `input_data` -- dict {<channel number>: <amplitude>}
@@ -253,9 +272,9 @@ def set_amplitude_output():
     for channel, amplitude in input_data.items():
         err = set_amplitude(channel, amplitude)
         if err:
-            return json.dumps(err)
+            return json.dumps({'error': err})
 
-    return json.dumps(get_dds_state())
+    return get_outputs()
 
 @app.route('/shutdown', methods=['POST', 'GET'])
 @auto.doc('public')
@@ -266,7 +285,7 @@ def shutdown():
     if func is None:
         raise RuntimeError('Not running with the Werkzeug Server')
     func()
-    return 'Server shutting down...'
+    return json.dumps('Server shutting down...')
 
 @app.route('/doc')
 def documentation():

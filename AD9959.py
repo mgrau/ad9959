@@ -639,12 +639,12 @@ class AD9959():
 
     def _init_freq_sweep(self, start_freq, end_freq, RSS, FSS, no_dwell):   
         FTW_step = self.clock_freq/2**32
-        Min_freq = FTW_step
+        Min_freq = 0
         Max_freq = (2**32-1)*FTW_step
         
          #Assert start_freq, end_freq, RSS and FSS are between min and max values, like in set_frequency
         start_FTW = round(start_freq/FTW_step)
-        assert start_FTW > 0, 'Minimum start_freq is %r' %Min_freq
+        assert start_FTW >= 0, 'Minimum start_freq is %r' %Min_freq
         end_FTW = round(end_freq/FTW_step)
         assert end_FTW > 0, 'Minimum end_freq  is %r' %Min_freq
         RDW = round(RSS/FTW_step)
@@ -797,10 +797,10 @@ class AD9959():
         #Assert frequency lies within allowed range
         FTW_step = self.clock_freq/2**32
         FTW = round(frequency/FTW_step)
-        Min_freq = FTW_step
+        Min_freq = 0
         Max_freq = (2**32-1)*FTW_step
             
-        assert FTW > 0, 'Minimum frequency is %r' %Min_freq
+        assert FTW >= 0, 'Minimum frequency is %r' %Min_freq
         assert FTW <= 2**32, 'Maximum frequency is %r' %Max_freq
 
         #Compute frequency tuning word for given frequency and clock frequency
