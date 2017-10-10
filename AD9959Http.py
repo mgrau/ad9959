@@ -23,7 +23,7 @@ set FLASK_APP=<filename>
 python -m flask run.
 
 ### Notes
-Make sure that flask and flask_autodoc are installed. Then replace add_custom_nl2br_filters(self, app) in 
+Make sure that flask and flask_autodoc are installed. Then replace `add_custom_nl2br_filters(self, app)` in 
 `<python-installation>\Lib\site-packages\flask_autodoc\autrodoc.py` by
 ```python
     _paragraph_re = re.compile(r'(?:\r\n|\r|\n){3,}')
@@ -37,6 +37,7 @@ Make sure that flask and flask_autodoc are installed. Then replace add_custom_nl
             result = Markup(result)
         return result
 ```
+Also import make sure `escape` and `Markup` are imported from `jinja2`
 
 ### Known bugs
 * Frequency ramps are set by programming the lower and upper frequency in two registers and the direction is then set by the state of the data pin (P0-P3) corresponding to that channel (pin high: ramp up, pin low: ramp down). This works correctly when starting with a ramp up but does not when you want to start with a ramp down. In order to get the ramp down to work, pull the data pin high, then program the ramp with the shortest possible transition time (1 us) and immedialely after program the ramp again with the correct transition time. After that pull the data pin low and the ramp will be done correctly. See `AD9959Http.set_frequency` for reference.
@@ -60,11 +61,10 @@ try:
         web_settings = json.load(f)
 except FileNotFoundError:
     web_settings = {"port": 5000,
-                    "channel names": {"0": "Channel 1",
-                                      "1": "CHannel 2",
-                                      "2": "Channel 3",
-                                      "3": "CHannel 4"},
-                    "background": "0xFFFFFF"}
+                    "channel names": {"0": "Channel 0 (DAC0/59)",
+                                      "1": "Channel 1 (DAC1/59)",
+                                      "2": "Channel 2 (DAC2/59)",
+                                      "3": "Channel 3 (DAC3/59)"}}
 
     with open('static/webinterface_settings.json', 'w') as f:
         json.dump(web_settings, f)
@@ -76,7 +76,7 @@ def get_dds_state():
 
     channels = []
     for i in range(4):
-        channels.append({'id': i, 'frequency': DDS.frequencies[i] / 1e6, 
+        channels.append({'id': str(i), 'frequency': DDS.frequencies[i] / 1e6, 
                          'phase': DDS.phases[i], 'amplitude': DDS.amplitudes[i] * 100})
     return channels
 
@@ -166,7 +166,7 @@ def index():
     """Generate the web interface from template file with current DDS settings. """
 
     channels = get_dds_state()
-    return flask.render_template('dds.html', channels=channels)
+    return flask.render_template('dds.html', channels=channels, settings=web_settings)
 
 @app.route('/set_apf/<int:channel>', methods=['POST', 'GET'])
 def set_APF(channel):
@@ -272,7 +272,7 @@ def shutdown():
 def documentation():
     """Shows the documentation rendered by autodoc. """
 
-    return auto.html('public', title='AD5764 doc')
+    return auto.html('public', title='AD9959 (DDS) doc')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=int(web_settings['port']))

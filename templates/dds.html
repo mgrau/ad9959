@@ -11,7 +11,11 @@
     {% for channel in channels %}
         <form action="{{ url_for('set_APF', channel=channel['id']) }}" method=post>
         <dl>
-            <h2>Channel {{ channel['id'] }}</h2>
+            {% for channel_name, display_name in settings['channel names'].items() %}
+            {% if channel_name == channel['id']  %}
+            <h2>{{ display_name }}</h2>
+            {% endif %}
+            {% endfor %}
             <dt>Amplitude (%):</dt>
             <dd><input name="amplitude_{{ channel['id'] }}" type=number value="{{ channel['amplitude'] }}"/></dd>
             <!--
