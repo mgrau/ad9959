@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """Server for AD9959 running on RPi.
 
 # Overview
@@ -49,7 +51,10 @@ from flask_autodoc import Autodoc
 from AD9959 import AD9959
 import json
 import time
+import subprocess
 
+# enable clock output
+subprocess.call(['/root/minimal_clk', '50.0M', '-q'])
 
 app = flask.Flask(__name__)
 auto = Autodoc(app)
