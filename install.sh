@@ -1,13 +1,14 @@
-#! /usr/bin/evn bash
+#! /usr/bin/env bash
 echo '>Install c compiler...'
-sudo pacman -S gclib
+sudo pacman -S glibc
 
 echo '>Enable clock output...'
 gcc minimal_clk.c -o minimal_clk
 sudo mv minimal_clk /usr/bin/minimal_clk
 
 echo '>Install required python libs...'
-sudo pip install flask_autodoc, RPi.GPIO
+sudo pip install flask_autodoc
+sudo pip install RPi.GPIO
 
 echo '>Install python service...'
 sudo mv ad9959Http.service /etc/systemd/system/ad9959Http.service
