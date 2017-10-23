@@ -1,6 +1,7 @@
 #! /usr/bin/env bash
 echo '>Install c compiler...'
-sudo pacman -S glibc
+sudo pacman -Syu glibc
+sudo pacman -Scc
 
 echo '>Enable clock output...'
 gcc minimal_clk.c -o minimal_clk
