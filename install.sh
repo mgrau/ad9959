@@ -11,6 +11,9 @@ echo '>Install required python libs...'
 sudo pip install flask_autodoc
 sudo pip install RPi.GPIO
 
+echo '>Patch Flask-autodoc...'
+sudo cp flask-autodoc_patch/autodoc.py /usr/lib/python3.6/site-packages/flask_autodoc/autrodoc.py
+
 echo '>Install python service...'
 sudo cp ad9959Http.service /etc/systemd/system/ad9959Http.service
 sudo systemctl enable ad9959Http.service

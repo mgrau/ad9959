@@ -19,7 +19,7 @@ For setting the output frequency and amplitude of the DDS channels you can do th
 * Write your own client. Check the documentation by browsing to `http://<your raspberry pi's ip>:5000/doc` for details.
 
 # Installation
-Clone this repository to your Raspberry Pi and run `./install.sh`. The bash script will install all required python libraries, set up the clock output of the Raspberry Pi and install a service that automatically starts the flask server.
+Clone this repository to your Raspberry Pi and run `./install.sh`. The bash script will install all required python libraries, set up the clock output of the Raspberry Pi and install a service that automatically starts the flask server. Additionally it will patch the flask-autodoc library such that the documentation is rendered correctly.
 Note that on the current version of the tiqi Raspberry Pi image no c compiler is installed. In case that will change in the future you will be asked whether you want to reinstall the compiler. Just answer with no and update the install script accordingly.
 
 # Documentation
