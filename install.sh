@@ -12,11 +12,11 @@ sudo pip install flask_autodoc
 sudo pip install RPi.GPIO
 
 echo '>Install python service...'
-sudo mv ad9959Http.service /etc/systemd/system/ad9959Http.service
+sudo cp ad9959Http.service /etc/systemd/system/ad9959Http.service
 sudo systemctl enable ad9959Http.service
 
 echo '>Start server...'
 sudo systemctl daemon-reload
 sudo systemctl start ad9959Http.service
 
-echo 'Done.'
+echo 'Finished installation.'

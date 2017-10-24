@@ -1,0 +1,12 @@
+[Unit]
+Description=Flask interface for AD9959 eval board
+After=network.target
+
+[Service]
+ExecStart=/home/tiqi/dev-AD9959/AD9959Http.py
+WorkingDirectory=/home/tiqi/dev-AD9959/
+Restart=always
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
