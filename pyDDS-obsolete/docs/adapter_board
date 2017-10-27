@@ -1,0 +1,44 @@
+# Raspberry Pi Pins
+
+| Pin | Raspberry Pi | Adapter Board |
+|-----|--------------|---------------|
+|   1 | 3.3V         | NC            |
+|   2 | 5V           | 5V`           |
+|   3 | SDA (I2C)    | N/A           |
+|   4 | 5V           | 5V            |
+|   5 | SCL (I2C)    | NC            |
+|   6 | GND          | GND           |
+|   7 | GPCLKC0      | CLK           |
+|   8 | TXD          | NC            |
+|   9 | GND          | GND           |
+|  10 | RXD          | NC            |
+|  11 |              | P2_1          |
+|  12 | PWM0         | P3_1          |
+|  13 |              | P1_1          |
+|  14 | GND          | GND           |
+|  15 |              | P0_1          |
+|  16 |              | IOUPDATE_1    |
+|  17 | 3.3V         | NC            |
+|  18 |              | RESET         |
+|  19 | MOSI         | MOSI          |
+|  20 | GND          | GND           |
+|  21 | MISO         | MISO          |
+|  22 |              | IOUPDATE_2    |
+|  23 | SCLK         | SCLK          |
+|  24 | CE0          | CE_1          |
+|  25 | GND          | GND           |
+|  26 | CE1          | CE_2          |
+|  27 | ID_SC        | NC            |
+|  28 | ID_SC        | NC            |
+|  29 |              | NC            |
+|  30 | GND          | GND           |
+|  31 |              | NC            |
+|  32 | PWM0         | P0_2          |
+|  33 | PWM1         | P1_2          |
+|  34 |              | GND           |
+|  35 |              | P2_2          |
+|  36 |              | NC            |
+|  37 |              | NC            |
+|  38 |              | P3_2          |
+|  39 | GND          | GND           |
+|  40 |              | NC            |

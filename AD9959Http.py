@@ -54,7 +54,7 @@ import time
 import subprocess
 
 # enable clock output
-subprocess.call(['/root/minimal_clk', '50.0M', '-q'])
+subprocess.call(['/usr/bin/minimal_clk', '50.0M', '-q'])
 
 app = flask.Flask(__name__)
 auto = Autodoc(app)
