@@ -10,7 +10,7 @@ import spidev
 import RPi.GPIO as gpio
 from warnings import warn
 import time
-
+import numpy as np
 
 IOUPDATE_PIN = 16
 RESET_PIN = 18
@@ -153,7 +153,7 @@ class AD9959():
         * `io_update` -- Setting `io_update=True` will issue an io update to write the settings into the DDS registers.
         
         ### Setting frequency
-        `value` must be frequency in Hz.
+        `value` must be frequency in Hz. This value is then rounded to a precision of 1 kHz.
 
         ### Setting phase
         `value` must be the phase in degress and must lie between 0 and 359.987 deg
@@ -174,6 +174,7 @@ class AD9959():
         
         if var == 'frequency':
             register = 'CFTW0'  #Write FTW to CFTW0 register
+            value = int(np.round(value / 1e3) * 1e3) # round frequency to 1 kHz.
             data = self._convert_frequency(value)
         
         elif var == 'phase':

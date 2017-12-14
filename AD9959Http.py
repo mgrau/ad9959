@@ -88,7 +88,7 @@ def set_frequency(channel, frequency):
     """Smooth transition of the frequency output of one channel to a new value.
     
     # Function description
-    Reads the current frequency of one channel from the DDS and then ramps to the new frequency withing 50 ms. After the ramp the frequency is set to the new value. When the current output frequency is 0, the new freuqncy is set immediately.
+    Reads the current frequency of one channel from the DDS and then ramps to the new frequency withing 50 ms. After the ramp the frequency is set to the new value. When the current output frequency is 0, the new freuqncy is set immediately. A ramp between the two frequencies is only performed when they differ by more than 1 MHz.
 
     ### Arguments
     * `channel` -- Channel number in [0, 1, 2, 3].
@@ -110,8 +110,8 @@ def set_frequency(channel, frequency):
         return 'Cannot convert <' + str(frequency) + '> to float.'
 
     f0 = DDS.frequencies[channel]
-
-    if f0 > 0 and f1 != f0:
+    
+    if f0 > 0 and abs(f1 - f0) > 1e6:
         if f0 < f1:
             try:
                 DDS.set_ramp_direction(channels=channel, direction='RD')
