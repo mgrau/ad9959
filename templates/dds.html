@@ -18,7 +18,7 @@
             {% endfor %}
             <dt>Amplitude (%):</dt>
             <dd><input name="amplitude_{{ channel['id'] }}" type=number step='0.1' value="{{ channel['amplitude'] }}"/></dd>
-            <dt>Phase:</dt>
+            <dt>Phase (deg):</dt>
             <dd><input name="phase_{{ channel['id'] }}" type=number value="{{ channel['phase'] }}"/></dd>
             <dt>Frequency (MHz):</dt>
             <dd><input name="frequency_{{ channel['id'] }}" type=number step='0.001' value="{{ channel['frequency'] }}"/></dd>

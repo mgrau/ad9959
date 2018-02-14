@@ -248,13 +248,14 @@ def get_outputs():
     * `channel number` -- Physical number of the channel in [0, 1, 2, 3].
     * `frequency` -- Frequency in Hz.
     * `amplitude` -- Amplitude scaling factor between 0 (no output) and 1 (maximum output).
+    * `phase` -- Phase in degree between 0-360
     * `displayed name` -- The name of the channel displayed in the web interface.
     """
     
     channels = get_dds_state()
     resp = {}
     for item in channels:
-        resp[item['id']] = {'frequency': item['frequency'] * 1e6, 'amplitude': item['amplitude'], 'name': web_settings['channel names'][item['id']]}
+        resp[item['id']] = {'frequency': item['frequency'] * 1e6, 'amplitude': item['amplitude'], 'phase': item['phase'], 'name': web_settings['channel names'][item['id']]}
     
     return json.dumps(resp)
     
