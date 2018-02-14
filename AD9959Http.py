@@ -163,6 +163,33 @@ def set_amplitude(channel, amplitude):
 
     return False
 
+def set_phase(channel, phase):
+    """Set the output phase of a channel. 
+    
+    ### Arguments
+    * `channel` -- Channel number in [0, 1, 2, 3].
+    * `phase` -- phase between 0-360 degree
+
+    ### Returns
+    False when new phase was set, Error message otherwise.
+    """
+
+    try:
+        channel = int(channel)
+    except ValueError:
+        return 'Cannot convert <' + str(channel) + '> to int.'
+    try:
+        phase = float(phase)
+    except ValueError:
+        return 'Cannot convert <' + str(phase) + '> to float.'
+
+    try:
+        DDS.set_output(channels=channel, value=phase, var='phase', io_update=True)
+    except AssertionError as ae:
+        return 'Error in set_phase. Message: ' + ae.args[0]
+
+    return False
+
 """ ~~~Functions soley used for operating the web page~~~ """
 
 @app.route('/')
@@ -192,11 +219,12 @@ def set_APF(channel):
 
     r = flask.request.form
     amplitude = float(r['amplitude_' + str(channel)])
-    #phase = float(r['phase_' + str(channel)])
+    phase = float(r['phase_' + str(channel)])
     frequency = float(r['frequency_' + str(channel)])
 
     set_frequency(channel, frequency*1e6)
     set_amplitude(channel, amplitude/100)
+    set_phase(channel, phase)
     
     return flask.redirect(flask.url_for('index'))
 
