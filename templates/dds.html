@@ -10,7 +10,7 @@
 
     {% for channel in channels %}
         <form action="{{ url_for('set_APF', channel=channel['id']) }}" method=post>
-        <dl>
+        <dl class="inputs">
             {% for channel_name, display_name in settings['channel names'].items() %}
             {% if channel_name == channel['id']  %}
             <h2>{{ display_name }}</h2>
