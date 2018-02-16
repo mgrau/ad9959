@@ -22,9 +22,9 @@
             <p>Phase (deg)</p>
         </div>
         <div class="settings">
+            <p><input name="frequency_{{ channel['id'] }}" type=number step='0.001' value="{{ channel['frequency'] }}"/></p>
             <p><input name="amplitude_{{ channel['id'] }}" type=number step='0.1' value="{{ channel['amplitude'] }}"/></p>
             <p><input name="phase_{{ channel['id'] }}" type=number value="{{ channel['phase'] }}"/></p>
-            <p><input name="frequency_{{ channel['id'] }}" type=number step='0.001' value="{{ channel['frequency'] }}"/></p>
         </div>
         <div class="update">
             <input type=submit value="Update output"></dd>
