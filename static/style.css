@@ -4,8 +4,14 @@ h1, h2          { font-family: 'Georgia', serif; margin: 0; }
 h1              { border-bottom: 2px solid #eee; }
 h2              { font-size: 1.2em; }
 
-.page           { margin: 2em auto; width: 35em; border: 5px solid #ccc;
-                  padding: 0.8em; background: white; }
+.page { 
+    margin: 2em auto; 
+    width: 35em; 
+    border: 5px solid #ccc;
+    padding: 0.8em; 
+    background: white; 
+}
+
 .entries        { list-style: none; margin: 0; padding: 0; }
 .entries li     { margin: 0.8em 1.2em; }
 .entries li h2  { margin-left: -1em; }
@@ -17,6 +23,7 @@ h2              { font-size: 1.2em; }
                   border: 1px solid #aacbe2; }
 .error          { background: #f0d6d6; padding: 0.5em; }
 
+/* old
 .inputs dt {
     clear: left;
     float: left;
@@ -24,4 +31,53 @@ h2              { font-size: 1.2em; }
 
 .inputs dd {
     float: left;
+}
+*/
+
+input {
+    width: 144px; /* makes sure the text input has a total width of 150 px */
+}
+
+/* container for each channel section */
+.device {
+    clear: both;
+    width: 310px;
+    padding-left: 5px; 
+    margin-left: 70px;
+    margin-top: 15px;
+    border-bottom: solid 2px #999;
+}
+
+/* container for each column in device */
+.settings {
+    float: left;
+    width: 150px;
+    padding: 0px;
+}
+.settings p {
+    height: 25px;
+    margin: 1px 0px 1px 0px;
+}
+
+/* container for update button of each channel */
+.update {
+    clear: both;
+    padding-bottom: 0px;
+    padding-top: 5px; /* distance to input above */
+    margin-bottom: 10px; /* distance between button and line below */
+}
+.update input{
+    margin-left: 150px;
+    height: 25px;
+    width: 150px;
+}
+
+/* container for buttons at the bottom of the page */
+.bottom {
+    border: none;
+    padding: 0px;
+}
+.bottom input {
+    height: 25px;
+    width: 150px;
 }

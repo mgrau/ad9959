@@ -9,31 +9,31 @@
     {% endfor %}
 
     {% for channel in channels %}
+    <div class="device">
         <form action="{{ url_for('set_APF', channel=channel['id']) }}" method=post>
-        <dl class="inputs">
-            {% for channel_name, display_name in settings['channel names'].items() %}
-            {% if channel_name == channel['id']  %}
-            <h2>{{ display_name }}</h2>
-            {% endif %}
-            {% endfor %}
-            <dt>Amplitude (%):</dt>
-            <dd><input name="amplitude_{{ channel['id'] }}" type=number step='0.1' value="{{ channel['amplitude'] }}"/></dd>
-            <dt>Phase (deg):</dt>
-            <dd><input name="phase_{{ channel['id'] }}" type=number value="{{ channel['phase'] }}"/></dd>
-            <dt>Frequency (MHz):</dt>
-            <dd><input name="frequency_{{ channel['id'] }}" type=number step='0.001' value="{{ channel['frequency'] }}"/></dd>
-            <input type=submit value="Update output"></dd>
-            <hr>
-        </dl>
-        </form>
-    {% endfor %}
-    
-     <form action="{{ url_for('reset_DDS') }}" method=post>
-    	<input type=submit value="Reset DDS">
-     </form>
-    <hr>
-    <form action="http://opticaltrap.ethz.ch/device_list.html">
-	    <input type=submit value="Back to device overview">
-    </form>
+        {% for channel_name, display_name in settings['channel names'].items() %}
+        {% if channel_name == channel['id']  %}
+        <h2>{{ display_name }}</h2>
+        {% endif %}
+        {% endfor %}
+        <div class="settings">
+            <p>Frequency (MHz)</p>
+            <p>Amplitude (%)</p>
+            <p>Phase (deg)</p>
+        </div>
+        <div class="settings">
+            <p><input name="amplitude_{{ channel['id'] }}" type=number step='0.1' value="{{ channel['amplitude'] }}"/></p>
+            <p><input name="phase_{{ channel['id'] }}" type=number value="{{ channel['phase'] }}"/></p>
+            <p><input name="frequency_{{ channel['id'] }}" type=number step='0.001' value="{{ channel['frequency'] }}"/></p>
+        </div>
+        <div class="update">
+            
+        </div>
+    </div> <!-- end device/-->
+    {% endfor %}    
+
+    <div class="device bottom">
+        <form action="{{ url_for('reset_DDS') }}" method=post><input type=submit value="Reset DDS"/></form>
+        <form action="http://opticaltrap.ethz.ch/device_list.html"><input type=submit value="Back to device overview"></form>
     </div>
-</div>
+</div><!-- end page/-->
